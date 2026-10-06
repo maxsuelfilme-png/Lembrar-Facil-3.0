@@ -1,0 +1,24 @@
+# Senhas e variáveis de ambiente
+.env
+.env.*
+
+# Ambiente virtual
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# SQLite antigo
+db.sqlite3
+
+# Uploads
+media/
+
+# VS Code
+.vscode/
+
+# Windows
+Thumbs.db
