@@ -7,7 +7,14 @@ class ConfirmacoesConfig(AppConfig):
     name = "confirmacoes"
 
     def ready(self):
-        # Evita iniciar duas vezes por causa do autoreload do Django
-        if os.environ.get("RUN_MAIN") == "true":
+        # No servidor local com runserver:
+        # inicia somente no processo correto do autoreload.
+        if "runserver" in os.sys.argv:
+            if os.environ.get("RUN_MAIN") == "true":
+                from .scheduler import iniciar_scheduler
+                iniciar_scheduler()
+
+        # No Railway/Gunicorn:
+        elif "gunicorn" in os.environ.get("SERVER_SOFTWARE", "").lower():
             from .scheduler import iniciar_scheduler
             iniciar_scheduler()
