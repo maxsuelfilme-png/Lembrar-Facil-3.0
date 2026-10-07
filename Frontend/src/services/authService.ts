@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // IP do computador onde o VIVERBACK está rodando
-export const API_URL = "http://10.41.236.204:8000/api";
+export const API_URL = "http://10.41.236.233:8000/api";
 
 const ACCESS_TOKEN_KEY = "@lembrafacil:access_token";
 const REFRESH_TOKEN_KEY = "@lembrafacil:refresh_token";
