@@ -127,4 +127,29 @@ O aplicativo utiliza uma API REST para comunicação com o banco de dados e aute
 
 ## 🔐 Segurança
 
-- Autenticação por tokens
+- Autenticação por tokens JWT.
+- Dados de medicamentos associados aos respectivos usuários.
+- Rotas protegidas por autenticação.
+- Credenciais da Meta e do banco de dados configuradas por variáveis de ambiente.
+- Tokens, senhas e arquivos `.env` não devem ser publicados no GitHub.
+
+## 📌 Situação atual do projeto
+
+**Funcionalidades implementadas e testadas:**
+
+- Cadastro e consulta de medicamentos.
+- Cadastro do contato familiar.
+- Backend online com PostgreSQL.
+- Identificação de atrasos.
+- Recebimento de alertas automáticos no WhatsApp de teste.
+
+**Próximas melhorias:**
+
+- Configuração de produção do WhatsApp Business.
+- Geração de APK para instalação em dispositivos Android.
+- Ampliação dos testes com diferentes usuários.
+- Melhorias de segurança, estabilidade e experiência do usuário.
+
+---
+
+**LembraFácil — Cuidando da sua rotina com carinho. 💚**
