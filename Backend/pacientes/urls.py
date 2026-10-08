@@ -12,7 +12,6 @@ urlpatterns = [
         MeuPerfilPacienteView.as_view(),
         name="meu-perfil-paciente",
     ),
-
     path(
         "meu-contato-familiar/",
         MeuContatoFamiliarView.as_view(),

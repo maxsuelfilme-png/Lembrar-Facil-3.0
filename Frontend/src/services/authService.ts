@@ -1,40 +1,28 @@
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // ======================================================
-// ENDEREÇOS DA API
+// API ONLINE - RAILWAY
 // ======================================================
 
-// Backend rodando no seu computador
-const API_LOCAL = "http://10.41.236.233:8000/api";
-
-// Backend online no Railway
-const API_ONLINE =
+export const API_URL =
   "https://lembrar-facil-30-production.up.railway.app/api";
 
 // ======================================================
-// ESCOLHA QUAL API USAR
-// ======================================================
-
-// Para funcionar em qualquer celular:
-export const API_URL = API_ONLINE;
-
-// Para testar localmente no seu computador, troque por:
-// export const API_URL = API_LOCAL;
-
-
-// ======================================================
-// TOKENS
+// CHAVES DE ARMAZENAMENTO
 // ======================================================
 
 const ACCESS_TOKEN_KEY = "@lembrafacil:access_token";
 const REFRESH_TOKEN_KEY = "@lembrafacil:refresh_token";
 
+// ======================================================
+// TIPOS
+// ======================================================
 
 type LoginResponse = {
   access: string;
   refresh: string;
 };
-
 
 // ======================================================
 // LOGIN
@@ -44,36 +32,30 @@ export async function fazerLogin(
   username: string,
   password: string
 ): Promise<LoginResponse> {
-
   const response = await fetch(`${API_URL}/token/`, {
     method: "POST",
-
     headers: {
       "Content-Type": "application/json",
     },
-
     body: JSON.stringify({
-      username,
+      username: username.trim(),
       password,
     }),
   });
 
   if (!response.ok) {
-    const corpo = await response.text();
-
-    console.log(
-      "Login falhou:",
-      response.status,
-      corpo
-    );
-
     throw new Error(
-      "Usuário ou senha inválidos."
+      "Não foi possível entrar. Confira seu usuário e senha."
     );
   }
 
-  const dados: LoginResponse =
-    await response.json();
+  const dados: LoginResponse = await response.json();
+
+  if (!dados.access || !dados.refresh) {
+    throw new Error(
+      "O servidor não retornou os tokens de autenticação."
+    );
+  }
 
   await AsyncStorage.multiSet([
     [ACCESS_TOKEN_KEY, dados.access],
@@ -83,9 +65,8 @@ export async function fazerLogin(
   return dados;
 }
 
-
 // ======================================================
-// CADASTRO + LOGIN AUTOMÁTICO
+// CADASTRO COM LOGIN AUTOMÁTICO
 // ======================================================
 
 export async function cadastrarEFazerLogin(
@@ -93,119 +74,86 @@ export async function cadastrarEFazerLogin(
   nome: string,
   password: string
 ): Promise<LoginResponse> {
-
   const response = await fetch(
     `${API_URL}/usuarios/cadastro/`,
     {
       method: "POST",
-
       headers: {
         "Content-Type": "application/json",
       },
-
       body: JSON.stringify({
-        username,
-        nome,
+        username: username.trim(),
+        nome: nome.trim(),
         password,
       }),
     }
   );
 
   if (!response.ok) {
-
-    const erro =
-      await response.json().catch(() => null);
-
-    console.log(
-      "Cadastro falhou:",
-      response.status,
-      erro
-    );
+    const erro = await response.json().catch(() => null);
 
     const mensagem = erro
       ? Object.values(erro)
           .flat()
+          .map(String)
           .join("\n")
-      : "Erro ao cadastrar.";
+      : "Não foi possível realizar o cadastro.";
 
     throw new Error(mensagem);
   }
 
-  return fazerLogin(
-    username,
-    password
-  );
+  return fazerLogin(username, password);
 }
 
-
 // ======================================================
-// PEGAR ACCESS TOKEN
+// CONSULTAR TOKENS
 // ======================================================
 
 export async function pegarAccessToken():
   Promise<string | null> {
-
-  return await AsyncStorage.getItem(
-    ACCESS_TOKEN_KEY
-  );
+  return AsyncStorage.getItem(ACCESS_TOKEN_KEY);
 }
-
-
-// ======================================================
-// PEGAR REFRESH TOKEN
-// ======================================================
 
 export async function pegarRefreshToken():
   Promise<string | null> {
-
-  return await AsyncStorage.getItem(
-    REFRESH_TOKEN_KEY
-  );
+  return AsyncStorage.getItem(REFRESH_TOKEN_KEY);
 }
-
 
 // ======================================================
 // RENOVAR ACCESS TOKEN
 // ======================================================
 
 export async function renovarAccessToken():
-  Promise<string> {
-
-  const refresh =
-    await pegarRefreshToken();
+  Promise<string | null> {
+  const refresh = await pegarRefreshToken();
 
   if (!refresh) {
-    throw new Error(
-      "Usuário não autenticado."
-    );
+    return null;
   }
 
   const response = await fetch(
     `${API_URL}/token/refresh/`,
     {
       method: "POST",
-
       headers: {
         "Content-Type": "application/json",
       },
-
-      body: JSON.stringify({
-        refresh,
-      }),
+      body: JSON.stringify({ refresh }),
     }
   );
 
   if (!response.ok) {
-
     await logout();
-
-    throw new Error(
-      "Sessão expirada. Faça login novamente."
-    );
+    return null;
   }
 
-  const dados =
+  const dados: { access?: string } =
     await response.json();
+
+  if (!dados.access) {
+    await logout();
+    return null;
+  }
 
   await AsyncStorage.setItem(
     ACCESS_TOKEN_KEY,
@@ -215,28 +163,28 @@ export async function renovarAccessToken():
   return dados.access;
 }
 
-
 // ======================================================
-// VERIFICAR SE ESTÁ LOGADO
+// VERIFICAR AUTENTICAÇÃO
 // ======================================================
 
 export async function estaLogado():
   Promise<boolean> {
+  const token = await pegarAccessToken();
 
-  const token =
-    await pegarAccessToken();
+  if (token) {
+    return true;
+  }
 
-  return !!token;
+  const renovado = await renovarAccessToken();
+  return !!renovado;
 }
 
-
 // ======================================================
-// LOGOUT
+// SAIR DA CONTA
 // ======================================================
 
 export async function logout():
   Promise<void> {
-
   await AsyncStorage.multiRemove([
     ACCESS_TOKEN_KEY,
     REFRESH_TOKEN_KEY,

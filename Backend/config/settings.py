@@ -18,7 +18,7 @@ DEBUG = True
 ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost",
-    "10.41.236.233",
+    "192.168.0.10",
     ".railway.app",
 ]
 

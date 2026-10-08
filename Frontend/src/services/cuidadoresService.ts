@@ -1,15 +1,17 @@
+
 import {
-    API_URL,
-    pegarAccessToken,
-    renovarAccessToken,
+  API_URL,
+  pegarAccessToken,
+  renovarAccessToken,
 } from "./authService";
 
 export type Cuidador = {
-  id: number;
   nome: string;
   telefone: string;
-  criado_em: string;
 };
+
+const URL_FAMILIAR =
+  `${API_URL.replace(/\/$/, "")}/pacientes/meu-contato-familiar/`;
 
 async function fetchAutenticado(
   url: string,
@@ -17,85 +19,106 @@ async function fetchAutenticado(
 ): Promise<Response> {
   let token = await pegarAccessToken();
 
+  // Tenta recuperar a sessão caso o access token não exista.
   if (!token) {
-    throw new Error("Usuário não autenticado.");
+    token = await renovarAccessToken();
   }
 
-  let response = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...(options.headers || {}),
-    },
-  });
+  if (!token) {
+    throw new Error(
+      "Usuário não autenticado. Faça login novamente."
+    );
+  }
 
-  if (response.status === 401) {
-    token = await renovarAccessToken();
-
-    response = await fetch(url, {
+  const enviar = (accessToken: string) =>
+    fetch(url, {
       ...options,
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
         ...(options.headers || {}),
+        Authorization: `Bearer ${accessToken}`,
       },
     });
+
+  let response = await enviar(token);
+
+  if (response.status === 401) {
+    const novoToken = await renovarAccessToken();
+
+    if (!novoToken) {
+      throw new Error(
+        "Sessão expirada. Faça login novamente."
+      );
+    }
+
+    response = await enviar(novoToken);
   }
 
   return response;
 }
 
+async function lerErro(
+  response: Response
+): Promise<string> {
+  const texto = await response.text();
+
+  try {
+    const dados = JSON.parse(texto);
+    return JSON.stringify(dados);
+  } catch {
+    return texto || "Erro desconhecido.";
+  }
+}
+
 export async function buscarMeuCuidador(): Promise<Cuidador> {
-  const response = await fetchAutenticado(
-    `${API_URL}/cuidadores/meu-perfil/`
-  );
+  const response = await fetchAutenticado(URL_FAMILIAR);
 
   if (!response.ok) {
-    const erro = await response.text();
-
-    console.error(
-      "Erro ao buscar cuidador:",
-      response.status,
-      erro
-    );
-
     throw new Error(
-      "Não foi possível carregar o familiar."
+      `Erro ao buscar familiar (${response.status}): ` +
+      await lerErro(response)
     );
   }
 
-  return await response.json();
+  return response.json();
 }
 
 export async function atualizarMeuCuidador(
   nome: string,
   telefone: string
 ): Promise<Cuidador> {
+  const nomeLimpo = nome.trim();
+  const telefoneLimpo = telefone.replace(/\D/g, "");
+
+  if (!nomeLimpo) {
+    throw new Error("Informe o nome do familiar.");
+  }
+
+  if (
+    !/^(?:55)?[1-9][0-9]{10}$/.test(telefoneLimpo)
+  ) {
+    throw new Error(
+      "Informe um celular válido com DDD. Ex.: 81999999999."
+    );
+  }
+
   const response = await fetchAutenticado(
-    `${API_URL}/cuidadores/meu-perfil/`,
+    URL_FAMILIAR,
     {
       method: "PATCH",
       body: JSON.stringify({
-        nome: nome.trim(),
-        telefone: telefone.trim(),
+        nome: nomeLimpo,
+        telefone: telefoneLimpo,
       }),
     }
   );
 
   if (!response.ok) {
-    const erro = await response.text();
-
-    console.error(
-      "Erro ao atualizar cuidador:",
-      response.status,
-      erro
-    );
-
     throw new Error(
-      "Não foi possível salvar o familiar."
+      `Erro ao salvar familiar (${response.status}): ` +
+      await lerErro(response)
     );
   }
 
-  return await response.json();
+  return response.json();
 }
