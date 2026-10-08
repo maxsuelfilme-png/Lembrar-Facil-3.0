@@ -1,87 +1,130 @@
-# 💊 LembraFácil — Frontend
+# 💚 LembraFácil 3.0
 
-O LembraFácil é um aplicativo desenvolvido para auxiliar no controle da rotina de
-medicamentos, facilitando o acompanhamento dos horários e das doses.
+### Sistema de Gerenciamento de Medicamentos e Alertas Automáticos
 
-## 📱 Funcionalidades
+O **LembraFácil** é um aplicativo desenvolvido para auxiliar pessoas idosas e seus familiares na organização e no acompanhamento de medicamentos.
 
-- Login e cadastro de usuário
-- Cadastro, edição e exclusão de medicamentos
-- Visualização dos medicamentos cadastrados
-- Leitura de receitas através de OCR
-- Extração de informações da receita
-- Edição e confirmação das informações antes de salvar
-- Controle dos horários dos medicamentos
-- Confirmação de doses tomadas
-- Acompanhamento da rotina de medicação
-- Aviso ao familiar/cuidador pelo WhatsApp
-- Área destinada ao familiar/cuidador
-- Identificação de doses em atraso (em desenvolvimento)
+O sistema permite cadastrar medicamentos, organizar horários, acompanhar a rotina e enviar alertas automáticos pelo WhatsApp ao familiar responsável quando uma dose não é confirmada no horário previsto.
 
-## 📷 Leitura de Receita com OCR
+## 🚀 Funcionalidades
 
-O aplicativo permite fotografar ou selecionar uma imagem de uma receita médica.
+- Cadastro e autenticação de usuários com JWT.
+- Cadastro, edição, consulta e exclusão de medicamentos.
+- Registro de dosagem, quantidade, horário, frequência e duração.
+- Leitura de receitas médicas com auxílio de OCR e revisão dos dados identificados.
+- Tela de acompanhamento da rotina de medicamentos.
+- Cadastro do nome e WhatsApp do familiar responsável.
+- Armazenamento dos dados em banco PostgreSQL.
+- Identificação automática de medicamentos atrasados.
+- Envio automático de alertas pelo WhatsApp Business Cloud API.
+- Acesso ao backend hospedado online no Railway.
 
-A tecnologia OCR transforma o conteúdo da imagem em texto para auxiliar na
-identificação de informações como:
+## 📲 Alertas automáticos pelo WhatsApp
 
-- Nome do medicamento
-- Dosagem
-- Quantidade
-- Horário
-- Frequência
-- Duração do tratamento
+O LembraFácil possui integração com a API oficial do WhatsApp da Meta.
 
-As informações podem ser conferidas e corrigidas pelo usuário antes de serem salvas.
+**Funcionamento:**
+
+1. O usuário cadastra um medicamento e seu horário.
+2. Na tela Família, informa o nome e o WhatsApp do familiar responsável.
+3. O Django armazena o contato no banco de dados.
+4. O sistema verifica periodicamente os horários dos medicamentos.
+5. Quando uma dose ultrapassa a tolerância configurada sem confirmação, o sistema registra o atraso.
+6. O backend consulta o WhatsApp do familiar e solicita o envio de uma mensagem automática.
+
+**Exemplo de mensagem:**
+
+> Alerta de medicamento
+>
+> O medicamento Teste, previsto para 16:42, ainda não foi confirmado como tomado. Por favor, verifique a rotina do paciente.
+
+**Status da integração:** envio e recebimento de mensagens validados em ambiente de testes da Meta. Nessa modalidade, os destinatários precisam estar autorizados. O uso com familiares em geral depende da configuração de produção da API.
 
 ## 🛠️ Tecnologias utilizadas
 
-- React Native
-- Expo
-- Expo Router
-- TypeScript
-- AsyncStorage
-- Expo Camera
-- Expo Image Picker
-- API REST
+| Componente | Tecnologia |
+|---|---|
+| Frontend | React Native, Expo e TypeScript |
+| Backend | Python, Django e Django REST Framework |
+| Autenticação | JWT |
+| Banco de dados | PostgreSQL |
+| Hospedagem | Railway |
+| Automação | APScheduler |
+| Mensagens | WhatsApp Business Cloud API |
+| Leitura de receitas | OCR |
+| Versionamento | Git e GitHub |
 
-## ▶️ Como rodar
+## 📂 Estrutura do projeto
 
-Pré-requisitos: Node.js instalado e o aplicativo **Expo Go** no celular.
+```text
+Lembra-Facil/
+├── Backend/
+│   ├── config/
+│   ├── medicamentos/
+│   ├── horarios/
+│   ├── confirmacoes/
+│   ├── pacientes/
+│   ├── cuidadores/
+│   ├── usuarios/
+│   ├── receitas/
+│   ├── whatsapp.py
+│   └── manage.py
+│
+├── Frontend/
+│   ├── app/
+│   ├── src/
+│   │   ├── screens/
+│   │   └── services/
+│   └── package.json
+│
+└── README.md
+```
+
+## 💻 Como executar o projeto
+
+### Backend
+
+Entre na pasta `Backend`, crie e ative um ambiente virtual e instale as dependências:
 
 ```bash
-git clone https://github.com/IcaroVeras/LembraFacil-Frontend-2.0.git
-cd LembraFacil-Frontend-2.0
+python -m venv venv
+```
 
+No Windows:
+
+```powershell
+venv\Scripts\activate
+```
+
+Depois:
+
+```bash
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
+```
+
+É necessário configurar previamente as variáveis de ambiente e o banco de dados.
+
+### Frontend
+
+Entre na pasta `Frontend`:
+
+```bash
 npm install
 npx expo start
 ```
 
-Leia o QR Code com o Expo Go (Android) ou com a câmera (iPhone). O celular e o
-computador precisam estar no **mesmo Wi-Fi**.
+Abra o aplicativo pelo Expo Go ou por uma versão de desenvolvimento compatível.
 
-## 🔗 Backend
+## ☁️ Backend online
 
-O aplicativo se comunica com uma API desenvolvida em Django REST Framework, para
-autenticação e gerenciamento dos medicamentos e registros de dose.
+O backend está hospedado no Railway:
 
-Repositório do backend: https://github.com/IcaroVeras/LembraFacil-Backend-2.0
+https://lembrar-facil-30-production.up.railway.app
 
-Para o app encontrar o servidor, edite o endereço em `src/services/authService.ts`:
+O aplicativo utiliza uma API REST para comunicação com o banco de dados e autenticação dos usuários.
 
-```ts
-export const API_URL = "http://IP_DO_SEU_COMPUTADOR:8000/api";
-```
+## 🔐 Segurança
 
-Use o IP do computador onde o backend está rodando (`ipconfig` no Windows) e inicie o
-servidor com `python manage.py runserver 0.0.0.0:8000`. O IP precisa estar em
-`ALLOWED_HOSTS` no `settings.py` do backend.
-
-## 🎯 Objetivo
-
-O objetivo do LembraFácil é tornar o controle de medicamentos mais simples e
-organizado, especialmente para idosos, familiares e cuidadores.
-
-## 🚧 Status
-
-Projeto em desenvolvimento.
+- Autenticação por tokens
