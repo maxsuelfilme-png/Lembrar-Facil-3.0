@@ -1,430 +1,155 @@
-# 💊 LembraFácil 3.0
+# 💚 LembraFácil 3.0
 
-O **LembraFácil** é um aplicativo para auxiliar no controle da rotina de medicamentos, especialmente de pessoas idosas.
+### Sistema de Gerenciamento de Medicamentos e Alertas Automáticos
 
-O sistema permite cadastrar medicamentos, organizar horários, confirmar doses, realizar leitura de receitas e avisar um familiar/cuidador pelo WhatsApp quando um medicamento estiver atrasado.
+O **LembraFácil** é um aplicativo desenvolvido para auxiliar pessoas idosas e seus familiares na organização e no acompanhamento de medicamentos.
 
----
+O sistema permite cadastrar medicamentos, organizar horários, acompanhar a rotina e enviar alertas automáticos pelo WhatsApp ao familiar responsável quando uma dose não é confirmada no horário previsto.
 
-## 🚀 Principais funcionalidades
+## 🚀 Funcionalidades
 
-- 🔐 Login com autenticação JWT
-- 👴 Área do idoso
-- 👨‍👩‍👧 Área da família/cuidador
-- 💊 Cadastro de medicamentos
-- ⏰ Controle dos horários
-- ✅ Confirmação de medicamento tomado
-- 📋 Rotina diária
-- 📷 Leitura de receitas com OCR
-- ⚠️ Identificação de medicamentos atrasados
-- 📱 Integração com WhatsApp
-- 🤖 Verificação automática com APScheduler
+- Cadastro e autenticação de usuários com JWT.
+- Cadastro, edição, consulta e exclusão de medicamentos.
+- Registro de dosagem, quantidade, horário, frequência e duração.
+- Leitura de receitas médicas com auxílio de OCR e revisão dos dados identificados.
+- Tela de acompanhamento da rotina de medicamentos.
+- Cadastro do nome e WhatsApp do familiar responsável.
+- Armazenamento dos dados em banco PostgreSQL.
+- Identificação automática de medicamentos atrasados.
+- Envio automático de alertas pelo WhatsApp Business Cloud API.
+- Acesso ao backend hospedado online no Railway.
 
----
+## 📲 Alertas automáticos pelo WhatsApp
 
-# 🛠️ Tecnologias utilizadas
+O LembraFácil possui integração com a API oficial do WhatsApp da Meta.
 
-## Backend
+**Funcionamento:**
 
-- Python
-- Django
-- Django REST Framework
-- Simple JWT
-- Django CORS Headers
-- Pillow
-- python-dotenv
-- Requests
-- APScheduler
-- SQLite
+1. O usuário cadastra um medicamento e seu horário.
+2. Na tela Família, informa o nome e o WhatsApp do familiar responsável.
+3. O Django armazena o contato no banco de dados.
+4. O sistema verifica periodicamente os horários dos medicamentos.
+5. Quando uma dose ultrapassa a tolerância configurada sem confirmação, o sistema registra o atraso.
+6. O backend consulta o WhatsApp do familiar e solicita o envio de uma mensagem automática.
 
-## Frontend
+**Exemplo de mensagem:**
 
-- React Native
-- Expo
-- Expo Router
-- TypeScript
-- AsyncStorage
+> Alerta de medicamento
+>
+> O medicamento Teste, previsto para 16:42, ainda não foi confirmado como tomado. Por favor, verifique a rotina do paciente.
 
-## Integrações
+**Status da integração:** envio e recebimento de mensagens validados em ambiente de testes da Meta. Nessa modalidade, os destinatários precisam estar autorizados. O uso com familiares em geral depende da configuração de produção da API.
 
-- OCR
-- Meta WhatsApp Cloud API
+## 🛠️ Tecnologias utilizadas
 
----
+| Componente | Tecnologia |
+|---|---|
+| Frontend | React Native, Expo e TypeScript |
+| Backend | Python, Django e Django REST Framework |
+| Autenticação | JWT |
+| Banco de dados | PostgreSQL |
+| Hospedagem | Railway |
+| Automação | APScheduler |
+| Mensagens | WhatsApp Business Cloud API |
+| Leitura de receitas | OCR |
+| Versionamento | Git e GitHub |
 
-# 📥 Baixando o projeto
+## 📂 Estrutura do projeto
 
-Clone o repositório:
-
-```bash
-git clone https://github.com/maxsuelfilme-png/Lembrar-Facil-3.0.git
+```text
+Lembra-Facil/
+├── Backend/
+│   ├── config/
+│   ├── medicamentos/
+│   ├── horarios/
+│   ├── confirmacoes/
+│   ├── pacientes/
+│   ├── cuidadores/
+│   ├── usuarios/
+│   ├── receitas/
+│   ├── whatsapp.py
+│   └── manage.py
+│
+├── Frontend/
+│   ├── app/
+│   ├── src/
+│   │   ├── screens/
+│   │   └── services/
+│   └── package.json
+│
+└── README.md
 ```
 
-Entre na pasta:
+## 💻 Como executar o projeto
 
-```bash
-cd Lembrar-Facil-3.0
-```
+### Backend
 
----
-
-# 🐍 Configuração do Backend
-
-Entre na pasta Backend:
-
-```bash
-cd Backend
-```
-
-## 1. Criar ambiente virtual
-
-No Windows:
+Entre na pasta `Backend`, crie e ative um ambiente virtual e instale as dependências:
 
 ```bash
 python -m venv venv
 ```
 
-Ative o ambiente:
+No Windows:
 
-```bash
+```powershell
 venv\Scripts\activate
-```
-
-Quando estiver ativado, deverá aparecer:
-
-```text
-(venv)
-```
-
-no início do terminal.
-
----
-
-## 2. Instalar as dependências
-
-A forma recomendada é:
-
-```bash
-pip install -r requirements.txt
-```
-
-Caso seja necessário instalar manualmente as principais bibliotecas:
-
-```bash
-pip install Django
-pip install djangorestframework
-pip install djangorestframework-simplejwt
-pip install django-cors-headers
-pip install Pillow
-pip install python-dotenv
-pip install requests
-pip install APScheduler
-```
-
-Também é possível instalar de uma vez:
-
-```bash
-pip install Django djangorestframework djangorestframework-simplejwt django-cors-headers Pillow python-dotenv requests APScheduler
-```
-
----
-
-## 3. Atualizar o requirements.txt
-
-Depois de instalar novas bibliotecas:
-
-```bash
-pip freeze > requirements.txt
-```
-
----
-
-## 4. Configurar o arquivo .env
-
-Crie:
-
-```text
-Backend/.env
-```
-
-Exemplo:
-
-```env
-WHATSAPP_TOKEN=SEU_TOKEN_DA_META
-WHATSAPP_PHONE_NUMBER_ID=SEU_PHONE_NUMBER_ID
-WHATSAPP_DESTINATARIO=NUMERO_DO_FAMILIAR
-```
-
-⚠️ Nunca envie o arquivo `.env` para o GitHub.
-
----
-
-## 5. Criar as migrações
-
-```bash
-python manage.py makemigrations
 ```
 
 Depois:
 
 ```bash
-python manage.py migrate
-```
-
----
-
-## 6. Criar usuário administrador
-
-```bash
-python manage.py createsuperuser
-```
-
-Informe:
-
-```text
-Username:
-Email:
-Password:
-```
-
----
-
-## 7. Rodar o Backend
-
-```bash
-python manage.py runserver 0.0.0.0:8000
-```
-
-O servidor será iniciado na porta:
-
-```text
-8000
-```
-
-Ao iniciar corretamente, a automação também deverá apresentar:
-
-```text
-Automacao do LembraFacil iniciada.
-```
-
-A verificação dos medicamentos atrasados será executada automaticamente pelo APScheduler.
-
----
-
-# 📱 Configuração do Frontend
-
-Abra outro terminal.
-
-Entre na pasta Frontend:
-
-```bash
-cd Frontend
-```
-
-Instale as dependências:
-
-```bash
-npm install
-```
-
-Caso o Expo apresente problemas:
-
-```bash
-npx expo install
-```
-
-Para iniciar:
-
-```bash
-npx expo start
-```
-
----
-
-# 🌐 Configuração da API
-
-No Frontend, configure o endereço do computador onde o Django está rodando.
-
-Exemplo:
-
-```typescript
-export const API_URL = "http://SEU_IP:8000/api";
-```
-
-Para descobrir o IP no Windows:
-
-```bash
-ipconfig
-```
-
-Procure o endereço IPv4 da rede utilizada.
-
-Exemplo:
-
-```text
-IPv4: 192.168.0.100
-```
-
-Então:
-
-```typescript
-export const API_URL = "http://192.168.0.100:8000/api";
-```
-
-O mesmo IP precisa estar autorizado no `ALLOWED_HOSTS` do Django.
-
-Exemplo:
-
-```python
-ALLOWED_HOSTS = [
-    "127.0.0.1",
-    "localhost",
-    "192.168.0.100",
-]
-```
-
----
-
-# 🔑 Principais rotas da API
-
-```text
-/api/medicamentos/
-/api/horarios/
-/api/confirmacoes/
-/api/receitas/
-/api/usuarios/
-/api/pacientes/
-/api/cuidadores/
-/api/token/
-/api/token/refresh/
-```
-
----
-
-# ⏰ Automação de medicamentos atrasados
-
-O LembraFácil utiliza o APScheduler.
-
-Fluxo:
-
-```text
-Horário do medicamento
-        ↓
-Paciente não confirma
-        ↓
-Tempo de tolerância é ultrapassado
-        ↓
-Backend identifica o atraso
-        ↓
-APScheduler executa a verificação
-        ↓
-WhatsApp Cloud API
-        ↓
-Familiar/cuidador recebe o alerta
-```
-
-Para testar manualmente a verificação:
-
-```bash
-python manage.py verificar_atrasos
-```
-
-Normalmente esse comando não precisa ser executado manualmente, pois o APScheduler realiza a verificação automaticamente enquanto o Backend estiver rodando.
-
----
-
-# 🔐 Segurança
-
-Nunca publique:
-
-```text
-.env
-Tokens da Meta
-Senhas
-Chaves secretas
-Credenciais
-```
-
-O `.gitignore` deve incluir:
-
-```gitignore
-.env
-venv/
-__pycache__/
-*.pyc
-node_modules/
-.expo/
-```
-
----
-
-# 🔄 Comandos Git
-
-Verificar alterações:
-
-```bash
-git status
-```
-
-Adicionar alterações:
-
-```bash
-git add .
-```
-
-Criar commit:
-
-```bash
-git commit -m "Atualizar projeto"
-```
-
-Enviar para o GitHub:
-
-```bash
-git push
-```
-
-Para baixar as alterações mais recentes em outro computador:
-
-```bash
-git pull
-```
-
----
-
-# ▶️ Resumo para rodar o projeto
-
-## Backend
-
-```bash
-cd Backend
-python -m venv venv
-venv\Scripts\activate
 pip install -r requirements.txt
 python manage.py migrate
-python manage.py runserver 0.0.0.0:8000
+python manage.py runserver
 ```
 
-## Frontend
+É necessário configurar previamente as variáveis de ambiente e o banco de dados.
 
-Em outro terminal:
+### Frontend
+
+Entre na pasta `Frontend`:
 
 ```bash
-cd Frontend
 npm install
 npx expo start
 ```
 
+Abra o aplicativo pelo Expo Go ou por uma versão de desenvolvimento compatível.
+
+## ☁️ Backend online
+
+O backend está hospedado no Railway:
+
+https://lembrar-facil-30-production.up.railway.app
+
+O aplicativo utiliza uma API REST para comunicação com o banco de dados e autenticação dos usuários.
+
+## 🔐 Segurança
+
+- Autenticação por tokens JWT.
+- Dados de medicamentos associados aos respectivos usuários.
+- Rotas protegidas por autenticação.
+- Credenciais da Meta e do banco de dados configuradas por variáveis de ambiente.
+- Tokens, senhas e arquivos `.env` não devem ser publicados no GitHub.
+
+## 📌 Situação atual do projeto
+
+**Funcionalidades implementadas e testadas:**
+
+- Cadastro e consulta de medicamentos.
+- Cadastro do contato familiar.
+- Backend online com PostgreSQL.
+- Identificação de atrasos.
+- Recebimento de alertas automáticos no WhatsApp de teste.
+
+**Próximas melhorias:**
+
+- Configuração de produção do WhatsApp Business.
+- Geração de APK para instalação em dispositivos Android.
+- Ampliação dos testes com diferentes usuários.
+- Melhorias de segurança, estabilidade e experiência do usuário.
+
 ---
 
-# 🎓 Projeto acadêmico
-
-Projeto desenvolvido no curso de **Análise e Desenvolvimento de Sistemas (ADS)**.
-
-**O objetivo do LembraFácil é utilizar tecnologia para auxiliar pacientes, familiares e cuidadores na organização e acompanhamento da rotina de medicamentos**.
-
----
-
-# 👨‍💻 LembraFácil 3.0
-
-Desenvolvido por Maxsuel José e Icaro Veras.
+**LembraFácil — Cuidando da sua rotina com carinho. 💚**
