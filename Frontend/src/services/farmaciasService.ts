@@ -1,8 +1,6 @@
 
 import { API_URL, obterTokenValido } from "./authService";
 
-// TIPOS
-
 export type CadastroFarmacia = {
   username: string;
   password: string;
@@ -36,7 +34,43 @@ export type PerfilFarmacia = {
   ativa: boolean;
 };
 
-// TRATAMENTO DE ERROS
+export type ProdutoFarmacia = {
+  id: number;
+  farmacia: number;
+  nome: string;
+  descricao: string;
+  preco: string;
+  quantidade_estoque: number;
+  disponivel: boolean;
+};
+
+export type DadosProdutoFarmacia = {
+  nome: string;
+  descricao: string;
+  preco: string;
+  quantidade_estoque: number;
+  disponivel: boolean;
+};
+
+export type ProdutoCatalogo = {
+  id: number;
+  nome: string;
+  descricao: string;
+  preco: string;
+  quantidade_estoque: number;
+  farmacia_nome: string;
+  farmacia_cidade: string;
+  farmacia_estado: string;
+  farmacia_faz_entrega: boolean;
+};
+
+type RespostaLista<T> = T[] | { results: T[] };
+
+function extrairLista<T>(resultado: RespostaLista<T>): T[] {
+  return Array.isArray(resultado)
+    ? resultado
+    : resultado.results ?? [];
+}
 
 async function obterMensagemErro(
   response: Response
@@ -51,18 +85,24 @@ async function obterMensagemErro(
     return dados.detail;
   }
 
-  return Object.entries(dados)
-    .map(([campo, mensagens]) => {
-      const texto = Array.isArray(mensagens)
-        ? mensagens.join(", ")
-        : String(mensagens);
+  if (Array.isArray(dados)) {
+    return dados.map(String).join("\n");
+  }
 
-      return `${campo}: ${texto}`;
-    })
-    .join("\n");
+  if (typeof dados === "object") {
+    return Object.entries(dados)
+      .map(([campo, mensagens]) => {
+        const texto = Array.isArray(mensagens)
+          ? mensagens.join(", ")
+          : String(mensagens);
+
+        return `${campo}: ${texto}`;
+      })
+      .join("\n");
+  }
+
+  return String(dados);
 }
-
-// CADASTRAR FARMÁCIA
 
 export async function cadastrarFarmacia(
   dados: CadastroFarmacia
@@ -84,8 +124,6 @@ export async function cadastrarFarmacia(
 
   return response.json();
 }
-
-// CONSULTAR PERFIL DA FARMÁCIA
 
 export async function buscarMinhaFarmacia(): Promise<PerfilFarmacia> {
   const token = await obterTokenValido();
@@ -112,4 +150,101 @@ export async function buscarMinhaFarmacia(): Promise<PerfilFarmacia> {
   }
 
   return response.json();
+}
+
+async function requisicaoProdutos<T>(
+  caminho: string,
+  metodo: "GET" | "POST" | "PATCH" | "DELETE" = "GET",
+  dados?: DadosProdutoFarmacia
+): Promise<T> {
+  const token = await obterTokenValido();
+
+  if (!token) {
+    throw new Error(
+      "Faça login na farmácia novamente."
+    );
+  }
+
+  const response = await fetch(
+    `${API_URL}/farmacias/produtos/${caminho}`,
+    {
+      method: metodo,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      ...(dados !== undefined
+        ? { body: JSON.stringify(dados) }
+        : {}),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await obterMensagemErro(response));
+  }
+
+  if (response.status === 204) {
+    return null as T;
+  }
+
+  return response.json();
+}
+
+export async function listarProdutosFarmacia(): Promise<ProdutoFarmacia[]> {
+  const resultado = await requisicaoProdutos<
+    RespostaLista<ProdutoFarmacia>
+  >("");
+
+  return extrairLista(resultado);
+}
+
+export async function adicionarProdutoFarmacia(
+  dados: DadosProdutoFarmacia
+): Promise<ProdutoFarmacia> {
+  return requisicaoProdutos<ProdutoFarmacia>(
+    "",
+    "POST",
+    dados
+  );
+}
+
+export async function atualizarProdutoFarmacia(
+  id: number,
+  dados: DadosProdutoFarmacia
+): Promise<ProdutoFarmacia> {
+  return requisicaoProdutos<ProdutoFarmacia>(
+    `${id}/`,
+    "PATCH",
+    dados
+  );
+}
+
+export async function excluirProdutoFarmacia(
+  id: number
+): Promise<void> {
+  await requisicaoProdutos<void>(
+    `${id}/`,
+    "DELETE"
+  );
+}
+
+export async function buscarCatalogoFarmacias(
+  busca: string = ""
+): Promise<ProdutoCatalogo[]> {
+  const parametro = busca.trim()
+    ? `?busca=${encodeURIComponent(busca.trim())}`
+    : "";
+
+  const response = await fetch(
+    `${API_URL}/farmacias/catalogo/${parametro}`
+  );
+
+  if (!response.ok) {
+    throw new Error(await obterMensagemErro(response));
+  }
+
+  const resultado: RespostaLista<ProdutoCatalogo> =
+    await response.json();
+
+  return extrairLista(resultado);
 }

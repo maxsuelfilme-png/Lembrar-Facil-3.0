@@ -90,7 +90,7 @@ export default function FarmaciasScreen() {
           style={styles.card}
           activeOpacity={0.85}
           onPress={() =>
-            emDesenvolvimento("Encontrar farmácias")
+            router.push("/farmacias-busca")
           }
         >
           <View style={[styles.cardIcon, styles.mapBg]}>

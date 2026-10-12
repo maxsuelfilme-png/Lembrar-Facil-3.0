@@ -1,5 +1,5 @@
 
-from rest_framework import generics, viewsets
+from rest_framework import generics, viewsets, serializers
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
 
@@ -65,3 +65,63 @@ class ProdutoFarmaciaViewSet(viewsets.ModelViewSet):
             )
 
         serializer.save(farmacia=farmacia)
+
+
+class CatalogoProdutoSerializer(serializers.ModelSerializer):
+    farmacia_nome = serializers.CharField(
+        source="farmacia.nome",
+        read_only=True
+    )
+
+    farmacia_cidade = serializers.CharField(
+        source="farmacia.cidade",
+        read_only=True
+    )
+
+    farmacia_estado = serializers.CharField(
+        source="farmacia.estado",
+        read_only=True
+    )
+
+    farmacia_faz_entrega = serializers.BooleanField(
+        source="farmacia.faz_entrega",
+        read_only=True
+    )
+
+    class Meta:
+        model = ProdutoFarmacia
+        fields = [
+            "id",
+            "nome",
+            "descricao",
+            "preco",
+            "quantidade_estoque",
+            "farmacia_nome",
+            "farmacia_cidade",
+            "farmacia_estado",
+            "farmacia_faz_entrega",
+        ]
+
+
+class CatalogoFarmaciasView(generics.ListAPIView):
+    serializer_class = CatalogoProdutoSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        queryset = ProdutoFarmacia.objects.filter(
+            farmacia__ativa=True,
+            farmacia__parceira=True,
+            disponivel=True,
+            quantidade_estoque__gt=0,
+        ).select_related("farmacia").order_by("nome")
+
+        busca = self.request.query_params.get(
+            "busca", ""
+        ).strip()
+
+        if busca:
+            queryset = queryset.filter(
+                nome__icontains=busca
+            )
+
+        return queryset

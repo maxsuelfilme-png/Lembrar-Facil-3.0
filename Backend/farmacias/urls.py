@@ -6,6 +6,7 @@ from .views import (
     CadastroFarmaciaView,
     MinhaFarmaciaView,
     ProdutoFarmaciaViewSet,
+    CatalogoFarmaciasView,
 )
 
 router = DefaultRouter()
@@ -26,6 +27,11 @@ urlpatterns = [
         "meu-perfil/",
         MinhaFarmaciaView.as_view(),
         name="minha-farmacia",
+    ),
+    path(
+        "catalogo/",
+        CatalogoFarmaciasView.as_view(),
+        name="catalogo-farmacias",
     ),
     path("", include(router.urls)),
 ]
