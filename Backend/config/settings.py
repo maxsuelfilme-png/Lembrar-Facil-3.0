@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "receitas",
     "pacientes",
     "cuidadores",
+    "farmacias",
 ]
 
 

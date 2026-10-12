@@ -20,6 +20,15 @@ type LoginResponse = {
   refresh: string;
 };
 
+type RefreshResponse = {
+  access: string;
+  refresh?: string;
+};
+
+// Evita várias renovações simultâneas
+let renovacaoEmAndamento: Promise<string | null> | null = null;
+
+// LOGIN
 export async function fazerLogin(
   username: string,
   password: string
@@ -57,6 +66,7 @@ export async function fazerLogin(
   return dados;
 }
 
+// CADASTRO E LOGIN
 export async function cadastrarEFazerLogin(
   username: string,
   nome: string,
@@ -93,6 +103,7 @@ export async function cadastrarEFazerLogin(
   return fazerLogin(username, password);
 }
 
+// CONSULTAR TOKENS SALVOS
 export async function pegarAccessToken(): Promise<string | null> {
   return AsyncStorage.getItem(ACCESS_TOKEN_KEY);
 }
@@ -101,48 +112,129 @@ export async function pegarRefreshToken(): Promise<string | null> {
   return AsyncStorage.getItem(REFRESH_TOKEN_KEY);
 }
 
+// VERIFICAR EXPIRAÇÃO DO JWT
+function tokenValido(token: string): boolean {
+  try {
+    const partes = token.split(".");
+
+    if (partes.length !== 3) {
+      return false;
+    }
+
+    // Compatível com React Native / Expo
+    const base64 = partes[1]
+      .replace(/-/g, "+")
+      .replace(/_/g, "/");
+
+    const caracteres =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    let bits = 0;
+    let valor = 0;
+    let resultado = "";
+
+    for (const caractere of base64.replace(/=+$/, "")) {
+      const indice = caracteres.indexOf(caractere);
+
+      if (indice < 0) {
+        return false;
+      }
+
+      valor = (valor << 6) | indice;
+      bits += 6;
+
+      if (bits >= 8) {
+        bits -= 8;
+        resultado += String.fromCharCode(
+          (valor >> bits) & 255
+        );
+      }
+    }
+
+    const payload = JSON.parse(resultado);
+
+    if (typeof payload.exp !== "number") {
+      return false;
+    }
+
+    // Margem de segurança de 30 segundos
+    return payload.exp * 1000 > Date.now() + 30000;
+  } catch {
+    return false;
+  }
+}
+
+// RENOVAÇÃO AUTOMÁTICA
 export async function renovarAccessToken(): Promise<string | null> {
+  if (renovacaoEmAndamento) {
+    return renovacaoEmAndamento;
+  }
+
+  renovacaoEmAndamento = executarRenovacao();
+
+  try {
+    return await renovacaoEmAndamento;
+  } finally {
+    renovacaoEmAndamento = null;
+  }
+}
+
+async function executarRenovacao(): Promise<string | null> {
   const refresh = await pegarRefreshToken();
 
   if (!refresh) {
     return null;
   }
 
-  const response = await fetch(
-    `${API_URL}/token/refresh/`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ refresh }),
+  try {
+    const response = await fetch(
+      `${API_URL}/token/refresh/`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ refresh }),
+      }
+    );
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        await logout();
+      }
+
+      return null;
     }
-  );
 
-  if (!response.ok) {
-    await logout();
+    const dados: RefreshResponse = await response.json();
+
+    if (!dados.access || !tokenValido(dados.access)) {
+      return null;
+    }
+
+    const itens: [string, string][] = [
+      [ACCESS_TOKEN_KEY, dados.access],
+    ];
+
+    // Compatível com rotação de refresh tokens
+    if (dados.refresh) {
+      itens.push([REFRESH_TOKEN_KEY, dados.refresh]);
+    }
+
+    await AsyncStorage.multiSet(itens);
+
+    return dados.access;
+  } catch (erro) {
+    console.error("Erro ao renovar sessão:", erro);
     return null;
   }
-
-  const dados: { access?: string } = await response.json();
-
-  if (!dados.access) {
-    await logout();
-    return null;
-  }
-
-  await AsyncStorage.setItem(
-    ACCESS_TOKEN_KEY,
-    dados.access
-  );
-
-  return dados.access;
 }
 
+// VERIFICAR SE ESTÁ LOGADO
 export async function estaLogado(): Promise<boolean> {
   const token = await pegarAccessToken();
 
-  if (token) {
+  if (token && tokenValido(token)) {
     return true;
   }
 
@@ -151,6 +243,18 @@ export async function estaLogado(): Promise<boolean> {
   return !!renovado;
 }
 
+// OBTER TOKEN VÁLIDO PARA REQUISIÇÕES
+export async function obterTokenValido(): Promise<string | null> {
+  const token = await pegarAccessToken();
+
+  if (token && tokenValido(token)) {
+    return token;
+  }
+
+  return renovarAccessToken();
+}
+
+// SAIR DA CONTA
 export async function logout(): Promise<void> {
   await AsyncStorage.multiRemove([
     ACCESS_TOKEN_KEY,
