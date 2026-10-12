@@ -1,32 +1,24 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// ======================================================
-// API ONLINE - RAILWAY
-// ======================================================
-
-export const API_URL =
+const API_ONLINE =
   "https://lembrar-facil-30-production.up.railway.app/api";
 
-// ======================================================
-// CHAVES DE ARMAZENAMENTO
-// ======================================================
+const API_LOCAL =
+  "http://192.168.1.100:8000/api";
+
+export const MODO_API: "online" | "local" = "online";
+
+export const API_URL =
+  MODO_API === "online" ? API_ONLINE : API_LOCAL;
 
 const ACCESS_TOKEN_KEY = "@lembrafacil:access_token";
 const REFRESH_TOKEN_KEY = "@lembrafacil:refresh_token";
-
-// ======================================================
-// TIPOS
-// ======================================================
 
 type LoginResponse = {
   access: string;
   refresh: string;
 };
-
-// ======================================================
-// LOGIN
-// ======================================================
 
 export async function fazerLogin(
   username: string,
@@ -65,10 +57,6 @@ export async function fazerLogin(
   return dados;
 }
 
-// ======================================================
-// CADASTRO COM LOGIN AUTOMÁTICO
-// ======================================================
-
 export async function cadastrarEFazerLogin(
   username: string,
   nome: string,
@@ -105,26 +93,15 @@ export async function cadastrarEFazerLogin(
   return fazerLogin(username, password);
 }
 
-// ======================================================
-// CONSULTAR TOKENS
-// ======================================================
-
-export async function pegarAccessToken():
-  Promise<string | null> {
+export async function pegarAccessToken(): Promise<string | null> {
   return AsyncStorage.getItem(ACCESS_TOKEN_KEY);
 }
 
-export async function pegarRefreshToken():
-  Promise<string | null> {
+export async function pegarRefreshToken(): Promise<string | null> {
   return AsyncStorage.getItem(REFRESH_TOKEN_KEY);
 }
 
-// ======================================================
-// RENOVAR ACCESS TOKEN
-// ======================================================
-
-export async function renovarAccessToken():
-  Promise<string | null> {
+export async function renovarAccessToken(): Promise<string | null> {
   const refresh = await pegarRefreshToken();
 
   if (!refresh) {
@@ -147,8 +124,7 @@ export async function renovarAccessToken():
     return null;
   }
 
-  const dados: { access?: string } =
-    await response.json();
+  const dados: { access?: string } = await response.json();
 
   if (!dados.access) {
     await logout();
@@ -163,12 +139,7 @@ export async function renovarAccessToken():
   return dados.access;
 }
 
-// ======================================================
-// VERIFICAR AUTENTICAÇÃO
-// ======================================================
-
-export async function estaLogado():
-  Promise<boolean> {
+export async function estaLogado(): Promise<boolean> {
   const token = await pegarAccessToken();
 
   if (token) {
@@ -176,15 +147,11 @@ export async function estaLogado():
   }
 
   const renovado = await renovarAccessToken();
+
   return !!renovado;
 }
 
-// ======================================================
-// SAIR DA CONTA
-// ======================================================
-
-export async function logout():
-  Promise<void> {
+export async function logout(): Promise<void> {
   await AsyncStorage.multiRemove([
     ACCESS_TOKEN_KEY,
     REFRESH_TOKEN_KEY,

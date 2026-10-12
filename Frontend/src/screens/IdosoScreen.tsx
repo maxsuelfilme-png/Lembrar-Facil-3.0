@@ -1,13 +1,16 @@
+
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Alert,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+
 import {
   Ionicons,
   MaterialCommunityIcons,
@@ -15,6 +18,28 @@ import {
 
 export default function IdosoScreen() {
   const router = useRouter();
+
+  const confirmarSOS = () => {
+    Alert.alert(
+      "Pedido de ajuda",
+      "Deseja avisar seu familiar que precisa de ajuda?",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
+        {
+          text: "Sim, pedir ajuda",
+          onPress: () => {
+            Alert.alert(
+              "SOS",
+              "O envio automático pelo WhatsApp ainda precisa ser configurado."
+            );
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -27,7 +52,11 @@ export default function IdosoScreen() {
             style={styles.voltarButton}
             onPress={() => router.back()}
           >
-            <Ionicons name="arrow-back" size={23} color="#2563EB" />
+            <Ionicons
+              name="arrow-back"
+              size={23}
+              color="#2563EB"
+            />
             <Text style={styles.voltar}>Voltar</Text>
           </TouchableOpacity>
 
@@ -53,11 +82,17 @@ export default function IdosoScreen() {
           onPress={() => router.push("/receita")}
         >
           <View style={[styles.iconBox, styles.receitaIcon]}>
-            <Ionicons name="camera" size={39} color="#2563EB" />
+            <Ionicons
+              name="camera"
+              size={39}
+              color="#2563EB"
+            />
           </View>
 
           <View style={styles.cardContent}>
-            <Text style={styles.cardTitle}>Ler receita</Text>
+            <Text style={styles.cardTitle}>
+              Ler receita
+            </Text>
             <Text style={styles.cardText}>
               Tire uma foto da sua receita para cadastrar os medicamentos
             </Text>
@@ -117,7 +152,9 @@ export default function IdosoScreen() {
           </View>
 
           <View style={styles.cardContent}>
-            <Text style={styles.cardTitle}>Minha rotina</Text>
+            <Text style={styles.cardTitle}>
+              Minha rotina
+            </Text>
             <Text style={styles.cardText}>
               Confira o que precisa fazer hoje
             </Text>
@@ -135,6 +172,10 @@ export default function IdosoScreen() {
         <TouchableOpacity
           style={styles.sos}
           activeOpacity={0.85}
+          onPress={confirmarSOS}
+          accessibilityRole="button"
+          accessibilityLabel="SOS, preciso de ajuda"
+          accessibilityHint="Abre uma confirmação para pedir ajuda"
         >
           <View style={styles.sosIconBox}>
             <Text style={styles.sosIcon}>SOS</Text>

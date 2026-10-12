@@ -4,6 +4,7 @@ from django.urls import path
 from .views import (
     MeuPerfilPacienteView,
     MeuContatoFamiliarView,
+    EnviarSOSView,
 )
 
 urlpatterns = [
@@ -16,5 +17,10 @@ urlpatterns = [
         "meu-contato-familiar/",
         MeuContatoFamiliarView.as_view(),
         name="meu-contato-familiar",
+    ),
+    path(
+        "sos/",
+        EnviarSOSView.as_view(),
+        name="enviar-sos",
     ),
 ]

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
 
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -8,48 +8,60 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
 import {
   Ionicons,
   MaterialCommunityIcons,
 } from "@expo/vector-icons";
-
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { estaLogado, logout } from "../services/authService";
 
-import { estaLogado } from "../services/authService";
+let primeiraAbertura = true;
 
 export default function Inicio() {
   const router = useRouter();
-
-  const [verificandoLogin, setVerificandoLogin] =
-    useState(true);
+  const [verificandoLogin, setVerificandoLogin] = useState(true);
 
   useEffect(() => {
-    verificarLogin();
-  }, []);
+    let ativo = true;
 
-  async function verificarLogin() {
-    try {
-      const logado = await estaLogado();
+    async function verificarLogin() {
+      try {
+        if (primeiraAbertura) {
+          primeiraAbertura = false;
+          await logout();
 
-      console.log("Usuário logado:", logado);
+          if (ativo) {
+            router.replace("/login");
+          }
+          return;
+        }
 
-      if (!logado) {
-        router.replace("/login");
-        return;
+        const logado = await estaLogado();
+
+        if (!ativo) return;
+
+        if (!logado) {
+          router.replace("/login");
+          return;
+        }
+
+        setVerificandoLogin(false);
+      } catch (erro) {
+        console.error("Erro ao verificar login:", erro);
+
+        if (ativo) {
+          router.replace("/login");
+        }
       }
-
-      setVerificandoLogin(false);
-    } catch (erro) {
-      console.error(
-        "Erro ao verificar login:",
-        erro
-      );
-
-      router.replace("/login");
     }
-  }
+
+    verificarLogin();
+
+    return () => {
+      ativo = false;
+    };
+  }, [router]);
 
   if (verificandoLogin) {
     return (
@@ -59,7 +71,6 @@ export default function Inicio() {
             size="large"
             color="#2563EB"
           />
-
           <Text style={styles.loadingText}>
             Carregando LembraFácil...
           </Text>
@@ -92,7 +103,6 @@ export default function Inicio() {
                 <Text style={styles.logoBlue}>
                   Lembra
                 </Text>
-
                 <Text style={styles.logoGreen}>
                   Fácil
                 </Text>
@@ -231,9 +241,7 @@ export default function Inicio() {
           <TouchableOpacity
             style={styles.quickCard}
             activeOpacity={0.85}
-            onPress={() =>
-              router.push("/receita")
-            }
+            onPress={() => router.push("/receita")}
           >
             <View
               style={[
@@ -320,7 +328,6 @@ export default function Inicio() {
               size={21}
               color="#16A34A"
             />
-
             <Text style={styles.footerText}>
               Simples{"\n"}de usar
             </Text>
@@ -329,12 +336,11 @@ export default function Inicio() {
           <View style={styles.footerDivider} />
 
           <View style={styles.footerItem}>
-            <Ionicons
-              name="shield-checkmark"
+            <MaterialCommunityIcons
+              name="shield-check"
               size={21}
               color="#16A34A"
             />
-
             <Text style={styles.footerText}>
               Seguro{"\n"}para sua família
             </Text>
@@ -348,7 +354,6 @@ export default function Inicio() {
               size={21}
               color="#16A34A"
             />
-
             <Text style={styles.footerText}>
               Feito com{"\n"}carinho
             </Text>
@@ -435,16 +440,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     justifyContent: "center",
     alignItems: "center",
-
     shadowColor: "#000",
     shadowOpacity: 0.07,
     shadowRadius: 8,
-
     shadowOffset: {
       width: 0,
       height: 3,
     },
-
     elevation: 3,
   },
 
@@ -475,19 +477,15 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     flexDirection: "row",
     alignItems: "center",
-
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.9)",
-
     shadowColor: "#0F172A",
     shadowOpacity: 0.08,
     shadowRadius: 12,
-
     shadowOffset: {
       width: 0,
       height: 5,
     },
-
     elevation: 4,
   },
 
@@ -589,16 +587,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 22,
     padding: 13,
-
     shadowColor: "#0F172A",
     shadowOpacity: 0.07,
     shadowRadius: 10,
-
     shadowOffset: {
       width: 0,
       height: 4,
     },
-
     elevation: 3,
   },
 

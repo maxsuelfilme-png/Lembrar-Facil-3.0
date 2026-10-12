@@ -83,3 +83,64 @@ def enviar_whatsapp(medicamento, horario, telefone):
     except requests.RequestException as erro:
         print("Erro ao enviar WhatsApp:", erro)
         return False
+
+def enviar_sos_whatsapp(nome_paciente, telefone):
+    import os
+    import requests
+
+    token = os.getenv("WHATSAPP_TOKEN")
+    phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+
+    destinatario = normalizar_telefone(telefone)
+
+    if not token or not phone_number_id or not destinatario:
+        return False
+
+    url = (
+        f"https://graph.facebook.com/v25.0/"
+        f"{phone_number_id}/messages"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+    dados = {
+        "messaging_product": "whatsapp",
+        "to": destinatario,
+        "type": "template",
+        "template": {
+            "name": "alerta_sos",
+            "language": {
+                "code": "pt_BR"
+            },
+            "components": [
+                {
+                    "type": "body",
+                    "parameters": [
+                        {
+                            "type": "text",
+                            "text": str(nome_paciente)
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+
+    try:
+        resposta = requests.post(
+            url,
+            headers=headers,
+            json=dados,
+            timeout=20
+        )
+
+        print("STATUS SOS META:", resposta.status_code)
+
+        return resposta.ok
+
+    except requests.RequestException as erro:
+        print("Erro ao solicitar SOS:", erro)
+        return False
