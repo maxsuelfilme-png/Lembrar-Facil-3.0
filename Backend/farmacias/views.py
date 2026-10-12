@@ -125,3 +125,34 @@ class CatalogoFarmaciasView(generics.ListAPIView):
             )
 
         return queryset
+
+
+class FarmaciasMapaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Farmacia
+        fields = [
+            "id",
+            "nome",
+            "endereco",
+            "cidade",
+            "estado",
+            "cep",
+            "latitude",
+            "longitude",
+            "faz_entrega",
+            "telefone",
+            "whatsapp",
+        ]
+
+
+class FarmaciasMapaView(generics.ListAPIView):
+    serializer_class = FarmaciasMapaSerializer
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        return Farmacia.objects.filter(
+            ativa=True,
+            parceira=True,
+            latitude__isnull=False,
+            longitude__isnull=False,
+        ).order_by("nome")

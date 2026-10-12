@@ -64,6 +64,20 @@ export type ProdutoCatalogo = {
   farmacia_faz_entrega: boolean;
 };
 
+export type FarmaciaMapa = {
+  id: number;
+  nome: string;
+  endereco: string;
+  cidade: string;
+  estado: string;
+  cep: string;
+  latitude: string | number;
+  longitude: string | number;
+  faz_entrega: boolean;
+  telefone: string;
+  whatsapp: string;
+};
+
 type RespostaLista<T> = T[] | { results: T[] };
 
 function extrairLista<T>(resultado: RespostaLista<T>): T[] {
@@ -244,6 +258,21 @@ export async function buscarCatalogoFarmacias(
   }
 
   const resultado: RespostaLista<ProdutoCatalogo> =
+    await response.json();
+
+  return extrairLista(resultado);
+}
+
+export async function listarFarmaciasMapa(): Promise<FarmaciaMapa[]> {
+  const response = await fetch(
+    `${API_URL}/farmacias/mapa/`
+  );
+
+  if (!response.ok) {
+    throw new Error(await obterMensagemErro(response));
+  }
+
+  const resultado: RespostaLista<FarmaciaMapa> =
     await response.json();
 
   return extrairLista(resultado);

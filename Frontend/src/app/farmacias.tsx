@@ -8,8 +8,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+
 import {
   Ionicons,
   MaterialCommunityIcons,
@@ -31,10 +33,12 @@ export default function FarmaciasScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
       >
+        {/* CABEÇALHO */}
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
+            activeOpacity={0.8}
           >
             <Ionicons
               name="arrow-back"
@@ -48,6 +52,7 @@ export default function FarmaciasScreen() {
               <Text style={styles.blue}>Lembra</Text>
               <Text style={styles.green}>Fácil</Text>
             </Text>
+
             <Text style={styles.subtitle}>
               Farmácias Parceiras
             </Text>
@@ -62,6 +67,7 @@ export default function FarmaciasScreen() {
           </View>
         </View>
 
+        {/* BANNER PRINCIPAL */}
         <View style={styles.banner}>
           <View style={styles.bannerIcon}>
             <MaterialCommunityIcons
@@ -76,9 +82,9 @@ export default function FarmaciasScreen() {
           </Text>
 
           <Text style={styles.bannerDescription}>
-            Encontre farmácias, acompanhe a reposição
-            dos medicamentos e solicite entregas
-            com autorização do cuidador.
+            Encontre farmácias parceiras, consulte
+            medicamentos e preços, visualize endereços
+            e acompanhe a reposição dos medicamentos.
           </Text>
         </View>
 
@@ -86,16 +92,15 @@ export default function FarmaciasScreen() {
           Como podemos ajudar?
         </Text>
 
+        {/* BUSCAR MEDICAMENTOS */}
         <TouchableOpacity
           style={styles.card}
           activeOpacity={0.85}
-          onPress={() =>
-            router.push("/farmacias-busca")
-          }
+          onPress={() => router.push("/farmacias-busca")}
         >
-          <View style={[styles.cardIcon, styles.mapBg]}>
+          <View style={[styles.cardIcon, styles.searchBg]}>
             <Ionicons
-              name="map-outline"
+              name="search-outline"
               size={34}
               color="#2563EB"
             />
@@ -105,9 +110,10 @@ export default function FarmaciasScreen() {
             <Text style={styles.cardTitle}>
               Encontrar farmácias
             </Text>
+
             <Text style={styles.cardDescription}>
-              Localize farmácias próximas da residência
-              do idoso e consulte seus serviços.
+              Pesquise medicamentos, compare preços
+              e consulte as farmácias disponíveis.
             </Text>
           </View>
 
@@ -118,6 +124,39 @@ export default function FarmaciasScreen() {
           />
         </TouchableOpacity>
 
+        {/* MAPA DAS FARMÁCIAS */}
+        <TouchableOpacity
+          style={styles.card}
+          activeOpacity={0.85}
+          onPress={() => router.push("/farmacias-mapa")}
+        >
+          <View style={[styles.cardIcon, styles.mapBg]}>
+            <Ionicons
+              name="map-outline"
+              size={34}
+              color="#7C3AED"
+            />
+          </View>
+
+          <View style={styles.cardContent}>
+            <Text style={styles.cardTitle}>
+              Ver farmácias no mapa
+            </Text>
+
+            <Text style={styles.cardDescription}>
+              Visualize a localização das farmácias
+              parceiras e descubra como chegar.
+            </Text>
+          </View>
+
+          <Ionicons
+            name="chevron-forward"
+            size={23}
+            color="#7C3AED"
+          />
+        </TouchableOpacity>
+
+        {/* REPOSIÇÃO DE MEDICAMENTOS */}
         <TouchableOpacity
           style={styles.card}
           activeOpacity={0.85}
@@ -137,6 +176,7 @@ export default function FarmaciasScreen() {
             <Text style={styles.cardTitle}>
               Reposição de medicamentos
             </Text>
+
             <Text style={styles.cardDescription}>
               Acompanhe o estoque e os alertas
               enviados ao cuidador.
@@ -150,12 +190,11 @@ export default function FarmaciasScreen() {
           />
         </TouchableOpacity>
 
+        {/* ACESSO DA FARMÁCIA */}
         <TouchableOpacity
           style={styles.card}
           activeOpacity={0.85}
-          onPress={() =>
-            router.push("/farmacia-login")
-          }
+          onPress={() => router.push("/farmacia-login")}
         >
           <View style={[styles.cardIcon, styles.storeBg]}>
             <MaterialCommunityIcons
@@ -169,9 +208,10 @@ export default function FarmaciasScreen() {
             <Text style={styles.cardTitle}>
               Sou Farmácia
             </Text>
+
             <Text style={styles.cardDescription}>
-              Cadastre sua farmácia, gerencie produtos,
-              preços, estoque e pedidos.
+              Cadastre sua farmácia e gerencie
+              produtos, preços e estoque.
             </Text>
           </View>
 
@@ -182,6 +222,7 @@ export default function FarmaciasScreen() {
           />
         </TouchableOpacity>
 
+        {/* INFORMAÇÕES DE SEGURANÇA */}
         <View style={styles.infoCard}>
           <Ionicons
             name="shield-checkmark-outline"
@@ -195,12 +236,15 @@ export default function FarmaciasScreen() {
             </Text>
 
             <Text style={styles.infoDescription}>
-              O contato com a farmácia somente será
-              realizado após a autorização do cuidador.
+              O contato para solicitar medicamentos
+              somente será realizado após a autorização
+              do cuidador. A venda e a entrega são
+              responsabilidade da farmácia.
             </Text>
           </View>
         </View>
 
+        {/* RODAPÉ */}
         <Text style={styles.footer}>
           LembraFácil — Cuidando de quem você ama 💙
         </Text>
@@ -214,16 +258,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F8FBFF",
   },
+
   content: {
     paddingHorizontal: 18,
     paddingBottom: 35,
   },
+
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingTop: 12,
     paddingBottom: 22,
   },
+
   backButton: {
     width: 44,
     height: 44,
@@ -233,24 +280,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 12,
   },
+
   headerText: {
     flex: 1,
   },
+
   logo: {
     fontSize: 27,
     fontWeight: "900",
   },
+
   blue: {
     color: "#2563EB",
   },
+
   green: {
     color: "#16A34A",
   },
+
   subtitle: {
     fontSize: 14,
     color: "#64748B",
     fontWeight: "600",
   },
+
   headerIcon: {
     width: 46,
     height: 46,
@@ -259,12 +312,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+
   banner: {
     backgroundColor: "#2563EB",
     borderRadius: 26,
     padding: 24,
     marginBottom: 27,
   },
+
   bannerIcon: {
     width: 65,
     height: 65,
@@ -274,6 +329,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 15,
   },
+
   bannerTitle: {
     fontSize: 25,
     lineHeight: 31,
@@ -281,17 +337,20 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     marginBottom: 10,
   },
+
   bannerDescription: {
     fontSize: 14,
     lineHeight: 21,
     color: "#EAF3FF",
   },
+
   sectionTitle: {
     fontSize: 23,
     fontWeight: "900",
     color: "#0F2557",
     marginBottom: 15,
   },
+
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 22,
@@ -308,6 +367,7 @@ const styles = StyleSheet.create({
       height: 3,
     },
   },
+
   cardIcon: {
     width: 64,
     height: 64,
@@ -316,29 +376,40 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 14,
   },
-  mapBg: {
+
+  searchBg: {
     backgroundColor: "#E4F1FF",
   },
+
+  mapBg: {
+    backgroundColor: "#F1E9FF",
+  },
+
   alertBg: {
     backgroundColor: "#FFF3D9",
   },
+
   storeBg: {
     backgroundColor: "#E8F9EE",
   },
+
   cardContent: {
     flex: 1,
   },
+
   cardTitle: {
     fontSize: 17,
     fontWeight: "900",
     color: "#0F2557",
     marginBottom: 5,
   },
+
   cardDescription: {
     fontSize: 12,
     lineHeight: 18,
     color: "#64748B",
   },
+
   infoCard: {
     flexDirection: "row",
     backgroundColor: "#EAF9F0",
@@ -347,21 +418,25 @@ const styles = StyleSheet.create({
     marginTop: 12,
     alignItems: "flex-start",
   },
+
   infoContent: {
     flex: 1,
     marginLeft: 12,
   },
+
   infoTitle: {
     fontSize: 16,
     fontWeight: "900",
     color: "#166534",
     marginBottom: 5,
   },
+
   infoDescription: {
     fontSize: 13,
     lineHeight: 19,
     color: "#166534",
   },
+
   footer: {
     textAlign: "center",
     color: "#64748B",
