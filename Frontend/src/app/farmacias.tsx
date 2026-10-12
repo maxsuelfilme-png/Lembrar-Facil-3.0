@@ -1,7 +1,6 @@
 
 import React from "react";
 import {
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,7 +10,6 @@ import {
 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-
 import {
   Ionicons,
   MaterialCommunityIcons,
@@ -19,13 +17,6 @@ import {
 
 export default function FarmaciasScreen() {
   const router = useRouter();
-
-  function emDesenvolvimento(nome: string) {
-    Alert.alert(
-      nome,
-      "Estamos preparando esta funcionalidade do LembraFácil."
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -67,7 +58,7 @@ export default function FarmaciasScreen() {
           </View>
         </View>
 
-        {/* BANNER PRINCIPAL */}
+        {/* BANNER */}
         <View style={styles.banner}>
           <View style={styles.bannerIcon}>
             <MaterialCommunityIcons
@@ -92,7 +83,7 @@ export default function FarmaciasScreen() {
           Como podemos ajudar?
         </Text>
 
-        {/* BUSCAR MEDICAMENTOS */}
+        {/* ENCONTRAR FARMÁCIAS */}
         <TouchableOpacity
           style={styles.card}
           activeOpacity={0.85}
@@ -160,9 +151,7 @@ export default function FarmaciasScreen() {
         <TouchableOpacity
           style={styles.card}
           activeOpacity={0.85}
-          onPress={() =>
-            emDesenvolvimento("Reposição de medicamentos")
-          }
+          onPress={() => router.push("/farmacias-reposicao")}
         >
           <View style={[styles.cardIcon, styles.alertBg]}>
             <Ionicons
@@ -190,39 +179,7 @@ export default function FarmaciasScreen() {
           />
         </TouchableOpacity>
 
-        {/* ACESSO DA FARMÁCIA */}
-        <TouchableOpacity
-          style={styles.card}
-          activeOpacity={0.85}
-          onPress={() => router.push("/farmacia-login")}
-        >
-          <View style={[styles.cardIcon, styles.storeBg]}>
-            <MaterialCommunityIcons
-              name="storefront-outline"
-              size={34}
-              color="#16A34A"
-            />
-          </View>
-
-          <View style={styles.cardContent}>
-            <Text style={styles.cardTitle}>
-              Sou Farmácia
-            </Text>
-
-            <Text style={styles.cardDescription}>
-              Cadastre sua farmácia e gerencie
-              produtos, preços e estoque.
-            </Text>
-          </View>
-
-          <Ionicons
-            name="chevron-forward"
-            size={23}
-            color="#16A34A"
-          />
-        </TouchableOpacity>
-
-        {/* INFORMAÇÕES DE SEGURANÇA */}
+        {/* SEGURANÇA */}
         <View style={styles.infoCard}>
           <Ionicons
             name="shield-checkmark-outline"
@@ -387,10 +344,6 @@ const styles = StyleSheet.create({
 
   alertBg: {
     backgroundColor: "#FFF3D9",
-  },
-
-  storeBg: {
-    backgroundColor: "#E8F9EE",
   },
 
   cardContent: {

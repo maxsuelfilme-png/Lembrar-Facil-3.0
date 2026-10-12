@@ -1,203 +1,233 @@
-import { useState } from "react";
+
+import React from "react";
+
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 
-import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 
-import { cadastrarEFazerLogin, fazerLogin } from "../services/authService";
+import {
+  Ionicons,
+  MaterialCommunityIcons,
+} from "@expo/vector-icons";
 
-export default function Login() {
+export default function FarmaciasScreen() {
   const router = useRouter();
 
-  const [modoCadastro, setModoCadastro] = useState(false);
-  const [nome, setNome] = useState("");
-  const [usuario, setUsuario] = useState("");
-  const [senha, setSenha] = useState("");
-  const [confirmarSenha, setConfirmarSenha] = useState("");
-  const [carregando, setCarregando] = useState(false);
-
-  function alternarModo() {
-    setModoCadastro((atual) => !atual);
-    setSenha("");
-    setConfirmarSenha("");
-  }
-
-  async function entrar() {
-    if (!usuario.trim() || !senha.trim()) {
-      Alert.alert("Atenção", "Digite o usuário e a senha.");
-      return;
-    }
-
-    try {
-      setCarregando(true);
-      await fazerLogin(usuario.trim(), senha);
-      router.replace("/");
-    } catch (erro) {
-      console.error("Erro no login:", erro);
-      Alert.alert(
-        "Não foi possível entrar",
-        "Verifique seu usuário, senha e a conexão com o servidor."
-      );
-    } finally {
-      setCarregando(false);
-    }
-  }
-
-  async function cadastrar() {
-    if (!nome.trim() || !usuario.trim() || !senha.trim()) {
-      Alert.alert("Atenção", "Preencha nome, usuário e senha.");
-      return;
-    }
-
-    if (senha !== confirmarSenha) {
-      Alert.alert("Atenção", "As senhas não são iguais.");
-      return;
-    }
-
-    try {
-      setCarregando(true);
-      await cadastrarEFazerLogin(usuario.trim(), nome.trim(), senha);
-      router.replace("/");
-    } catch (erro: any) {
-      console.error("Erro no cadastro:", erro);
-      // Mostra a mensagem real do servidor (usuário duplicado, senha fraca...)
-      Alert.alert(
-        "Não foi possível criar a conta",
-        erro?.message || "Verifique os dados e a conexão com o servidor."
-      );
-    } finally {
-      setCarregando(false);
-    }
-  }
-
-  const acaoPrincipal = modoCadastro ? cadastrar : entrar;
-
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.keyboard}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+    <SafeAreaView
+      style={styles.container}
+      edges={["top"]}
+    >
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
       >
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Text style={styles.logo}>LembraFácil</Text>
+        {/* CABEÇALHO */}
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="arrow-back"
+              size={24}
+              color="#2563EB"
+            />
+          </TouchableOpacity>
 
-          <Text style={styles.subtitle}>
-            Cuidando da sua rotina com carinho
-          </Text>
-
-          <View style={styles.card}>
-            <Text style={styles.title}>
-              {modoCadastro ? "Criar conta" : "Entrar"}
+          <View style={styles.headerText}>
+            <Text style={styles.logo}>
+              <Text style={styles.blue}>Lembra</Text>
+              <Text style={styles.green}>Fácil</Text>
             </Text>
 
-            <Text style={styles.description}>
-              {modoCadastro
-                ? "Crie sua conta para começar a usar o aplicativo."
-                : "Entre na sua conta para acessar seus medicamentos."}
+            <Text style={styles.subtitle}>
+              Farmácias Parceiras
             </Text>
-
-            {modoCadastro && (
-              <>
-                <Text style={styles.label}>Nome completo</Text>
-                <TextInput
-                  style={styles.input}
-                  value={nome}
-                  onChangeText={setNome}
-                  placeholder="Digite seu nome"
-                  placeholderTextColor="#999"
-                  autoCapitalize="words"
-                  editable={!carregando}
-                />
-              </>
-            )}
-
-            <Text style={styles.label}>Usuário</Text>
-            <TextInput
-              style={styles.input}
-              value={usuario}
-              onChangeText={setUsuario}
-              placeholder="Digite seu usuário"
-              placeholderTextColor="#999"
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!carregando}
-            />
-
-            <Text style={styles.label}>Senha</Text>
-            <TextInput
-              style={styles.input}
-              value={senha}
-              onChangeText={setSenha}
-              placeholder="Digite sua senha"
-              placeholderTextColor="#999"
-              secureTextEntry
-              editable={!carregando}
-              onSubmitEditing={modoCadastro ? undefined : entrar}
-            />
-
-            {modoCadastro && (
-              <>
-                <Text style={styles.label}>Confirmar senha</Text>
-                <TextInput
-                  style={styles.input}
-                  value={confirmarSenha}
-                  onChangeText={setConfirmarSenha}
-                  placeholder="Repita a senha"
-                  placeholderTextColor="#999"
-                  secureTextEntry
-                  editable={!carregando}
-                  onSubmitEditing={cadastrar}
-                />
-              </>
-            )}
-
-            <TouchableOpacity
-              style={[
-                styles.loginButton,
-                carregando && styles.loginButtonDisabled,
-              ]}
-              onPress={acaoPrincipal}
-              disabled={carregando}
-            >
-              {carregando ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.loginButtonText}>
-                  {modoCadastro ? "CRIAR CONTA" : "ENTRAR"}
-                </Text>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.linkButton}
-              onPress={alternarModo}
-              disabled={carregando}
-            >
-              <Text style={styles.linkText}>
-                {modoCadastro
-                  ? "Já tenho conta. Entrar"
-                  : "Não tenho conta. Criar agora"}
-              </Text>
-            </TouchableOpacity>
           </View>
 
-          <Text style={styles.footer}>🔒 Seus dados ficam protegidos</Text>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <View style={styles.headerIcon}>
+            <MaterialCommunityIcons
+              name="storefront-outline"
+              size={29}
+              color="#7C3AED"
+            />
+          </View>
+        </View>
+
+        {/* BANNER PRINCIPAL */}
+        <View style={styles.banner}>
+          <View style={styles.bannerIcon}>
+            <MaterialCommunityIcons
+              name="medical-bag"
+              size={42}
+              color="#FFFFFF"
+            />
+          </View>
+
+          <Text style={styles.bannerTitle}>
+            Seus medicamentos sempre por perto
+          </Text>
+
+          <Text style={styles.bannerDescription}>
+            Encontre farmácias parceiras, consulte
+            medicamentos e preços, visualize endereços
+            e acompanhe a reposição dos medicamentos.
+          </Text>
+        </View>
+
+        <Text style={styles.sectionTitle}>
+          Como podemos ajudar?
+        </Text>
+
+        {/* BUSCAR MEDICAMENTOS */}
+        <TouchableOpacity
+          style={styles.card}
+          activeOpacity={0.85}
+          onPress={() => router.push("/farmacias-busca")}
+        >
+          <View
+            style={[
+              styles.cardIcon,
+              styles.searchBg,
+            ]}
+          >
+            <Ionicons
+              name="search-outline"
+              size={34}
+              color="#2563EB"
+            />
+          </View>
+
+          <View style={styles.cardContent}>
+            <Text style={styles.cardTitle}>
+              Encontrar farmácias
+            </Text>
+
+            <Text style={styles.cardDescription}>
+              Pesquise medicamentos, compare preços
+              e consulte as farmácias disponíveis.
+            </Text>
+          </View>
+
+          <Ionicons
+            name="chevron-forward"
+            size={23}
+            color="#2563EB"
+          />
+        </TouchableOpacity>
+
+        {/* MAPA DAS FARMÁCIAS */}
+        <TouchableOpacity
+          style={styles.card}
+          activeOpacity={0.85}
+          onPress={() => router.push("/farmacias-mapa")}
+        >
+          <View
+            style={[
+              styles.cardIcon,
+              styles.mapBg,
+            ]}
+          >
+            <Ionicons
+              name="map-outline"
+              size={34}
+              color="#7C3AED"
+            />
+          </View>
+
+          <View style={styles.cardContent}>
+            <Text style={styles.cardTitle}>
+              Ver farmácias no mapa
+            </Text>
+
+            <Text style={styles.cardDescription}>
+              Visualize a localização das farmácias
+              parceiras e descubra como chegar.
+            </Text>
+          </View>
+
+          <Ionicons
+            name="chevron-forward"
+            size={23}
+            color="#7C3AED"
+          />
+        </TouchableOpacity>
+
+        {/* REPOSIÇÃO DE MEDICAMENTOS */}
+        <TouchableOpacity
+          style={styles.card}
+          activeOpacity={0.85}
+          onPress={() =>
+            router.push("/farmacias-reposicao")
+          }
+        >
+          <View
+            style={[
+              styles.cardIcon,
+              styles.alertBg,
+            ]}
+          >
+            <Ionicons
+              name="notifications-outline"
+              size={34}
+              color="#D97706"
+            />
+          </View>
+
+          <View style={styles.cardContent}>
+            <Text style={styles.cardTitle}>
+              Reposição de medicamentos
+            </Text>
+
+            <Text style={styles.cardDescription}>
+              Acompanhe o estoque e as solicitações
+              de reposição dos medicamentos.
+            </Text>
+          </View>
+
+          <Ionicons
+            name="chevron-forward"
+            size={23}
+            color="#D97706"
+          />
+        </TouchableOpacity>
+
+        {/* INFORMAÇÕES DE SEGURANÇA */}
+        <View style={styles.infoCard}>
+          <Ionicons
+            name="shield-checkmark-outline"
+            size={28}
+            color="#16A34A"
+          />
+
+          <View style={styles.infoContent}>
+            <Text style={styles.infoTitle}>
+              Segurança em primeiro lugar
+            </Text>
+
+            <Text style={styles.infoDescription}>
+              O contato para solicitar medicamentos
+              somente será realizado após a autorização
+              do cuidador. A venda e a entrega são
+              responsabilidade da farmácia.
+            </Text>
+          </View>
+        </View>
+
+        {/* RODAPÉ */}
+        <Text style={styles.footer}>
+          LembraFácil — Cuidando de quem você ama 💙
+        </Text>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -205,116 +235,188 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7F8FA",
-  },
-
-  keyboard: {
-    flex: 1,
+    backgroundColor: "#F8FBFF",
   },
 
   content: {
-    flexGrow: 1,
+    paddingHorizontal: 18,
+    paddingBottom: 35,
+  },
+
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: 12,
+    paddingBottom: 22,
+  },
+
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    backgroundColor: "#EAF3FF",
     justifyContent: "center",
-    paddingHorizontal: 25,
-    paddingVertical: 20,
+    alignItems: "center",
+    marginRight: 12,
+  },
+
+  headerText: {
+    flex: 1,
   },
 
   logo: {
-    fontSize: 42,
-    fontWeight: "800",
+    fontSize: 27,
+    fontWeight: "900",
+  },
+
+  blue: {
     color: "#2563EB",
-    textAlign: "center",
+  },
+
+  green: {
+    color: "#16A34A",
   },
 
   subtitle: {
-    fontSize: 17,
-    color: "#666",
-    textAlign: "center",
-    marginTop: 8,
-    marginBottom: 35,
+    fontSize: 14,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+
+  headerIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
+    backgroundColor: "#F1E9FF",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  banner: {
+    backgroundColor: "#2563EB",
+    borderRadius: 26,
+    padding: 24,
+    marginBottom: 27,
+  },
+
+  bannerIcon: {
+    width: 65,
+    height: 65,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+
+  bannerTitle: {
+    fontSize: 25,
+    lineHeight: 31,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    marginBottom: 10,
+  },
+
+  bannerDescription: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: "#EAF3FF",
+  },
+
+  sectionTitle: {
+    fontSize: 23,
+    fontWeight: "900",
+    color: "#0F2557",
+    marginBottom: 15,
   },
 
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 22,
-    padding: 25,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-  },
-
-  title: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#222",
-    textAlign: "center",
-  },
-
-  description: {
-    fontSize: 15,
-    color: "#666",
-    textAlign: "center",
-    lineHeight: 21,
-    marginTop: 8,
-    marginBottom: 25,
-  },
-
-  label: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#333",
-    marginBottom: 8,
-  },
-
-  input: {
-    height: 56,
-    borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    fontSize: 17,
-    color: "#222",
-    backgroundColor: "#F9FAFB",
-    marginBottom: 20,
-  },
-
-  loginButton: {
-    height: 58,
-    borderRadius: 14,
-    backgroundColor: "#2563EB",
+    padding: 16,
+    marginBottom: 14,
+    flexDirection: "row",
     alignItems: "center",
+    elevation: 3,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+  },
+
+  cardIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
     justifyContent: "center",
-    marginTop: 5,
-  },
-
-  loginButtonDisabled: {
-    opacity: 0.6,
-  },
-
-  loginButtonText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "800",
-  },
-
-  linkButton: {
-    marginTop: 18,
-    paddingVertical: 8,
     alignItems: "center",
+    marginRight: 14,
   },
 
-  linkText: {
-    color: "#2563EB",
+  searchBg: {
+    backgroundColor: "#E4F1FF",
+  },
+
+  mapBg: {
+    backgroundColor: "#F1E9FF",
+  },
+
+  alertBg: {
+    backgroundColor: "#FFF3D9",
+  },
+
+  cardContent: {
+    flex: 1,
+  },
+
+  cardTitle: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: "#0F2557",
+    marginBottom: 5,
+  },
+
+  cardDescription: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: "#64748B",
+  },
+
+  infoCard: {
+    flexDirection: "row",
+    backgroundColor: "#EAF9F0",
+    borderRadius: 20,
+    padding: 17,
+    marginTop: 12,
+    alignItems: "flex-start",
+  },
+
+  infoContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+
+  infoTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "900",
+    color: "#166534",
+    marginBottom: 5,
+  },
+
+  infoDescription: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#166534",
   },
 
   footer: {
     textAlign: "center",
-    color: "#777",
-    fontSize: 14,
-    marginTop: 25,
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 30,
   },
 });

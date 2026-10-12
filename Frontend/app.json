@@ -33,7 +33,13 @@
         }
       ],
       "expo-image",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "react-native-maps",
+        {
+          "androidGoogleMapsApiKey": "AIzaSyBpLOJUCKobJgMGZyO5bK76lJprO59Z4NY"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
@@ -44,6 +50,12 @@
       "eas": {
         "projectId": "d7541c6b-d908-432e-8fea-406f6e925f37"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d7541c6b-d908-432e-8fea-406f6e925f37"
     }
   }
 }
