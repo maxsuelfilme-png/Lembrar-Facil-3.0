@@ -1,7 +1,12 @@
 
+from django.db import transaction
 from django.db.models import Q
+
 from rest_framework import viewsets
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import (
+    PermissionDenied,
+    ValidationError,
+)
 from rest_framework.permissions import IsAuthenticated
 
 from .models import Medicamento
@@ -16,41 +21,28 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
     serializer_class = MedicamentoSerializer
     permission_classes = [IsAuthenticated]
 
+    # ==================================================
+    # PACIENTES AUTORIZADOS
+    # ==================================================
+
     def pacientes_autorizados(self):
-        """
-        Retorna os IDs dos usuários dos pacientes
-        vinculados ao cuidador autenticado.
-        """
         return VinculoCuidadorPaciente.objects.filter(
             cuidador__usuario=self.request.user,
-            ativo=True
+            ativo=True,
         ).values_list("paciente__usuario_id", flat=True)
 
-    def get_queryset(self):
-        usuario = self.request.user
+    # ==================================================
+    # VALIDAR PACIENTE
+    # ==================================================
 
-        return Medicamento.objects.filter(
-            Q(usuario=usuario)
-            | Q(usuario_id__in=self.pacientes_autorizados())
-        ).distinct().order_by("-id")
+    def obter_paciente_autorizado(self, paciente_id):
+        try:
+            paciente_id = int(paciente_id)
+        except (TypeError, ValueError):
+            raise ValidationError({
+                "paciente_id": "Informe um ID de paciente válido."
+            })
 
-    def obter_usuario_destino(self):
-        usuario = self.request.user
-
-        paciente_id = self.request.data.get("paciente_id")
-
-        # Cadastro do próprio paciente.
-        if paciente_id in (None, ""):
-            if Paciente.objects.filter(
-                usuario=usuario
-            ).exists():
-                return usuario
-
-            raise PermissionDenied(
-                "Informe um paciente autorizado para cadastrar o medicamento."
-            )
-
-        # Cadastro pelo familiar para um paciente vinculado.
         paciente = Paciente.objects.filter(
             id=paciente_id
         ).first()
@@ -60,22 +52,84 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
                 "Paciente não encontrado ou não autorizado."
             )
 
-        if paciente.usuario_id == usuario.id:
-            return usuario
+        if paciente.usuario_id == self.request.user.id:
+            return paciente
 
         autorizado = VinculoCuidadorPaciente.objects.filter(
-            cuidador__usuario=usuario,
+            cuidador__usuario=self.request.user,
             paciente=paciente,
-            ativo=True
+            ativo=True,
         ).exists()
 
         if not autorizado:
             raise PermissionDenied(
-                "Você não possui autorização para cadastrar medicamentos deste paciente."
+                "Você não possui autorização para este paciente."
             )
+
+        return paciente
+
+    # ==================================================
+    # LISTAR MEDICAMENTOS
+    # ==================================================
+
+    def get_queryset(self):
+        usuario = self.request.user
+
+        queryset = Medicamento.objects.filter(
+            Q(usuario=usuario)
+            | Q(usuario_id__in=self.pacientes_autorizados())
+        ).distinct()
+
+        paciente_id = self.request.query_params.get(
+            "paciente_id"
+        )
+
+        if paciente_id not in (None, ""):
+            paciente = self.obter_paciente_autorizado(
+                paciente_id
+            )
+
+            queryset = queryset.filter(
+                usuario=paciente.usuario
+            )
+
+        return queryset.order_by("-id")
+
+    # ==================================================
+    # DEFINIR DONO DO MEDICAMENTO
+    # ==================================================
+
+    def obter_usuario_destino(self):
+        usuario = self.request.user
+
+        paciente_id = self.request.data.get(
+            "paciente_id"
+        )
+
+        if paciente_id in (None, ""):
+            if Paciente.objects.filter(
+                usuario=usuario
+            ).exists():
+                return usuario
+
+            raise ValidationError({
+                "paciente_id": (
+                    "O familiar precisa informar "
+                    "o paciente vinculado."
+                )
+            })
+
+        paciente = self.obter_paciente_autorizado(
+            paciente_id
+        )
 
         return paciente.usuario
 
+    # ==================================================
+    # CADASTRAR MEDICAMENTO
+    # ==================================================
+
+    @transaction.atomic
     def perform_create(self, serializer):
         usuario_destino = self.obter_usuario_destino()
 
@@ -86,15 +140,24 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
         HorarioMedicamento.objects.create(
             medicamento=medicamento,
             horario=medicamento.horario,
-            ativo=True
+            ativo=True,
         )
 
+    # ==================================================
+    # ATUALIZAR MEDICAMENTO
+    # ==================================================
+
+    @transaction.atomic
     def perform_update(self, serializer):
         medicamento = serializer.save()
 
-        horario_existente = HorarioMedicamento.objects.filter(
-            medicamento=medicamento
-        ).order_by("id").first()
+        horario_existente = (
+            HorarioMedicamento.objects.filter(
+                medicamento=medicamento
+            )
+            .order_by("id")
+            .first()
+        )
 
         if horario_existente:
             horario_existente.horario = medicamento.horario
@@ -106,9 +169,14 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
             HorarioMedicamento.objects.create(
                 medicamento=medicamento,
                 horario=medicamento.horario,
-                ativo=True
+                ativo=True,
             )
 
+    # ==================================================
+    # EXCLUIR MEDICAMENTO
+    # ==================================================
+
+    @transaction.atomic
     def perform_destroy(self, instance):
         HorarioMedicamento.objects.filter(
             medicamento=instance

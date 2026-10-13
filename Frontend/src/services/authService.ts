@@ -1,6 +1,10 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// ======================================================
+// CONFIGURAÇÃO DA API
+// ======================================================
+
 const API_ONLINE =
   "https://lembrar-facil-30-production.up.railway.app/api";
 
@@ -12,8 +16,19 @@ export const MODO_API: "online" | "local" = "online";
 export const API_URL =
   MODO_API === "online" ? API_ONLINE : API_LOCAL;
 
+// ======================================================
+// CHAVES DE ARMAZENAMENTO
+// ======================================================
+
+// Sessão tradicional: familiar e demais usuários.
+// Mantidas para compatibilidade com o código existente.
 const ACCESS_TOKEN_KEY = "@lembrafacil:access_token";
 const REFRESH_TOKEN_KEY = "@lembrafacil:refresh_token";
+
+// Sessão independente do idoso.
+const IDOSO_ACCESS_KEY = "@lembrafacil:idoso_access";
+const IDOSO_REFRESH_KEY = "@lembrafacil:idoso_refresh";
+const IDOSO_PACIENTE_KEY = "@lembrafacil:idoso_paciente_id";
 
 type LoginResponse = {
   access: string;
@@ -25,10 +40,64 @@ type RefreshResponse = {
   refresh?: string;
 };
 
-// Evita várias renovações simultâneas
-let renovacaoEmAndamento: Promise<string | null> | null = null;
+type AtivacaoPacienteResponse = LoginResponse & {
+  paciente_id: number;
+};
 
-// LOGIN
+type TipoSessao = "usuario" | "idoso";
+
+const renovacoes: Partial<
+  Record<TipoSessao, Promise<string | null>>
+> = {};
+
+let ativacaoIdosoEmAndamento:
+  Promise<string> | null = null;
+
+// ======================================================
+// CONFIGURAÇÃO DAS SESSÕES
+// ======================================================
+
+function chavesSessao(tipo: TipoSessao) {
+  if (tipo === "idoso") {
+    return {
+      access: IDOSO_ACCESS_KEY,
+      refresh: IDOSO_REFRESH_KEY,
+    };
+  }
+
+  return {
+    access: ACCESS_TOKEN_KEY,
+    refresh: REFRESH_TOKEN_KEY,
+  };
+}
+
+async function salvarSessao(
+  tipo: TipoSessao,
+  dados: LoginResponse
+): Promise<void> {
+  const chaves = chavesSessao(tipo);
+
+  await AsyncStorage.multiSet([
+    [chaves.access, dados.access],
+    [chaves.refresh, dados.refresh],
+  ]);
+}
+
+async function limparSessao(
+  tipo: TipoSessao
+): Promise<void> {
+  const chaves = chavesSessao(tipo);
+
+  await AsyncStorage.multiRemove([
+    chaves.access,
+    chaves.refresh,
+  ]);
+}
+
+// ======================================================
+// LOGIN TRADICIONAL
+// ======================================================
+
 export async function fazerLogin(
   username: string,
   password: string
@@ -58,15 +127,15 @@ export async function fazerLogin(
     );
   }
 
-  await AsyncStorage.multiSet([
-    [ACCESS_TOKEN_KEY, dados.access],
-    [REFRESH_TOKEN_KEY, dados.refresh],
-  ]);
+  await salvarSessao("usuario", dados);
 
   return dados;
 }
 
-// CADASTRO E LOGIN
+// ======================================================
+// CADASTRO TRADICIONAL
+// ======================================================
+
 export async function cadastrarEFazerLogin(
   username: string,
   nome: string,
@@ -103,16 +172,44 @@ export async function cadastrarEFazerLogin(
   return fazerLogin(username, password);
 }
 
-// CONSULTAR TOKENS SALVOS
-export async function pegarAccessToken(): Promise<string | null> {
+// ======================================================
+// CONSULTAR TOKENS
+// ======================================================
+
+export async function pegarAccessToken():
+  Promise<string | null> {
   return AsyncStorage.getItem(ACCESS_TOKEN_KEY);
 }
 
-export async function pegarRefreshToken(): Promise<string | null> {
+export async function pegarRefreshToken():
+  Promise<string | null> {
   return AsyncStorage.getItem(REFRESH_TOKEN_KEY);
 }
 
+export async function pegarAccessTokenIdoso():
+  Promise<string | null> {
+  return AsyncStorage.getItem(IDOSO_ACCESS_KEY);
+}
+
+export async function pegarPacienteId():
+  Promise<number | null> {
+  const valor = await AsyncStorage.getItem(
+    IDOSO_PACIENTE_KEY
+  );
+
+  if (!valor) return null;
+
+  const id = Number(valor);
+
+  return Number.isInteger(id) && id > 0
+    ? id
+    : null;
+}
+
+// ======================================================
 // VERIFICAR EXPIRAÇÃO DO JWT
+// ======================================================
+
 function tokenValido(token: string): boolean {
   try {
     const partes = token.split(".");
@@ -121,7 +218,6 @@ function tokenValido(token: string): boolean {
       return false;
     }
 
-    // Compatível com React Native / Expo
     const base64 = partes[1]
       .replace(/-/g, "+")
       .replace(/_/g, "/");
@@ -136,9 +232,7 @@ function tokenValido(token: string): boolean {
     for (const caractere of base64.replace(/=+$/, "")) {
       const indice = caracteres.indexOf(caractere);
 
-      if (indice < 0) {
-        return false;
-      }
+      if (indice < 0) return false;
 
       valor = (valor << 6) | indice;
       bits += 6;
@@ -153,38 +247,29 @@ function tokenValido(token: string): boolean {
 
     const payload = JSON.parse(resultado);
 
-    if (typeof payload.exp !== "number") {
-      return false;
-    }
-
-    // Margem de segurança de 30 segundos
-    return payload.exp * 1000 > Date.now() + 30000;
+    return (
+      typeof payload.exp === "number" &&
+      payload.exp * 1000 > Date.now() + 30000
+    );
   } catch {
     return false;
   }
 }
 
-// RENOVAÇÃO AUTOMÁTICA
-export async function renovarAccessToken(): Promise<string | null> {
-  if (renovacaoEmAndamento) {
-    return renovacaoEmAndamento;
-  }
+// ======================================================
+// RENOVAR SESSÃO
+// ======================================================
 
-  renovacaoEmAndamento = executarRenovacao();
+async function executarRenovacao(
+  tipo: TipoSessao
+): Promise<string | null> {
+  const chaves = chavesSessao(tipo);
 
-  try {
-    return await renovacaoEmAndamento;
-  } finally {
-    renovacaoEmAndamento = null;
-  }
-}
+  const refresh = await AsyncStorage.getItem(
+    chaves.refresh
+  );
 
-async function executarRenovacao(): Promise<string | null> {
-  const refresh = await pegarRefreshToken();
-
-  if (!refresh) {
-    return null;
-  }
+  if (!refresh) return null;
 
   try {
     const response = await fetch(
@@ -199,65 +284,201 @@ async function executarRenovacao(): Promise<string | null> {
     );
 
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        await logout();
+      if (
+        response.status === 401 ||
+        response.status === 403
+      ) {
+        await limparSessao(tipo);
       }
 
       return null;
     }
 
-    const dados: RefreshResponse = await response.json();
+    const dados: RefreshResponse =
+      await response.json();
 
     if (!dados.access || !tokenValido(dados.access)) {
       return null;
     }
 
     const itens: [string, string][] = [
-      [ACCESS_TOKEN_KEY, dados.access],
+      [chaves.access, dados.access],
     ];
 
-    // Compatível com rotação de refresh tokens
     if (dados.refresh) {
-      itens.push([REFRESH_TOKEN_KEY, dados.refresh]);
+      itens.push([chaves.refresh, dados.refresh]);
     }
 
     await AsyncStorage.multiSet(itens);
 
     return dados.access;
   } catch (erro) {
-    console.error("Erro ao renovar sessão:", erro);
+    console.error(
+      `Erro ao renovar sessão ${tipo}:`,
+      erro
+    );
     return null;
   }
 }
 
-// VERIFICAR SE ESTÁ LOGADO
-export async function estaLogado(): Promise<boolean> {
-  const token = await pegarAccessToken();
-
-  if (token && tokenValido(token)) {
-    return true;
+async function renovarSessao(
+  tipo: TipoSessao
+): Promise<string | null> {
+  if (renovacoes[tipo]) {
+    return renovacoes[tipo]!;
   }
 
-  const renovado = await renovarAccessToken();
+  const promessa = executarRenovacao(tipo);
+  renovacoes[tipo] = promessa;
 
-  return !!renovado;
+  try {
+    return await promessa;
+  } finally {
+    if (renovacoes[tipo] === promessa) {
+      delete renovacoes[tipo];
+    }
+  }
 }
 
-// OBTER TOKEN VÁLIDO PARA REQUISIÇÕES
-export async function obterTokenValido(): Promise<string | null> {
-  const token = await pegarAccessToken();
+export async function renovarAccessToken():
+  Promise<string | null> {
+  return renovarSessao("usuario");
+}
+
+export async function renovarAccessTokenIdoso():
+  Promise<string | null> {
+  return renovarSessao("idoso");
+}
+
+// ======================================================
+// OBTER TOKEN VÁLIDO
+// ======================================================
+
+async function obterTokenDaSessao(
+  tipo: TipoSessao
+): Promise<string | null> {
+  const chaves = chavesSessao(tipo);
+
+  const token = await AsyncStorage.getItem(
+    chaves.access
+  );
 
   if (token && tokenValido(token)) {
     return token;
   }
 
-  return renovarAccessToken();
+  return renovarSessao(tipo);
 }
 
-// SAIR DA CONTA
+// Mantém compatibilidade com o familiar.
+export async function obterTokenValido():
+  Promise<string | null> {
+  return obterTokenDaSessao("usuario");
+}
+
+export async function estaLogado():
+  Promise<boolean> {
+  return !!(await obterTokenValido());
+}
+
+// ======================================================
+// ATIVAÇÃO AUTOMÁTICA DO IDOSO
+// ======================================================
+
+async function executarAtivacaoIdoso():
+  Promise<string> {
+  const tokenExistente = await obterTokenDaSessao(
+    "idoso"
+  );
+
+  if (tokenExistente) {
+    return tokenExistente;
+  }
+
+  // Se ainda existe refresh, não criamos outra
+  // conta automaticamente: evitamos perder
+  // o vínculo com o paciente anterior.
+  const refreshExistente = await AsyncStorage.getItem(
+    IDOSO_REFRESH_KEY
+  );
+
+  const pacienteExistente = await pegarPacienteId();
+
+  if (refreshExistente || pacienteExistente) {
+    throw new Error(
+      "A sessão do paciente expirou. É necessário recuperar a conta antes de continuar."
+    );
+  }
+
+  const response = await fetch(
+    `${API_URL}/usuarios/ativar-paciente/`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    }
+  );
+
+  if (!response.ok) {
+    const texto = await response.text();
+
+    throw new Error(
+      `Não foi possível ativar o paciente (${response.status}): ${texto.substring(0, 200)}`
+    );
+  }
+
+  const dados: AtivacaoPacienteResponse =
+    await response.json();
+
+  if (
+    !dados.access ||
+    !dados.refresh ||
+    !dados.paciente_id
+  ) {
+    throw new Error(
+      "O servidor retornou uma ativação incompleta."
+    );
+  }
+
+  await salvarSessao("idoso", dados);
+
+  await AsyncStorage.setItem(
+    IDOSO_PACIENTE_KEY,
+    String(dados.paciente_id)
+  );
+
+  return dados.access;
+}
+
+export async function iniciarSessaoIdoso():
+  Promise<string> {
+  if (ativacaoIdosoEmAndamento) {
+    return ativacaoIdosoEmAndamento;
+  }
+
+  ativacaoIdosoEmAndamento =
+    executarAtivacaoIdoso();
+
+  try {
+    return await ativacaoIdosoEmAndamento;
+  } finally {
+    ativacaoIdosoEmAndamento = null;
+  }
+}
+
+export async function obterTokenValidoIdoso():
+  Promise<string | null> {
+  return obterTokenDaSessao("idoso");
+}
+
+// ======================================================
+// LOGOUT
+// ======================================================
+
+// Sair da conta do familiar não apaga
+// a conta automática do idoso.
 export async function logout(): Promise<void> {
-  await AsyncStorage.multiRemove([
-    ACCESS_TOKEN_KEY,
-    REFRESH_TOKEN_KEY,
-  ]);
+  await limparSessao("usuario");
 }

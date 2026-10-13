@@ -1,5 +1,6 @@
 
 import React, { useCallback, useState } from "react";
+
 import {
   ActivityIndicator,
   Alert,
@@ -12,11 +13,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  Ionicons,
-  MaterialCommunityIcons,
-} from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 
 import {
@@ -24,29 +23,47 @@ import {
   buscarMeuCuidador,
 } from "../services/cuidadoresService";
 
+import {
+  listarPacientesVinculados,
+  vincularPaciente,
+  type VinculoPaciente,
+} from "../services/vinculosService";
+
 export default function FamiliaScreen() {
   const router = useRouter();
 
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
+  const [codigo, setCodigo] = useState("");
+  const [vinculos, setVinculos] = useState<VinculoPaciente[]>([]);
+
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
+  const [vinculando, setVinculando] = useState(false);
+  const [erro, setErro] = useState("");
 
-  // BUSCAR DADOS DO FAMILIAR NO DJANGO
-  const carregarCuidador = useCallback(async () => {
+  // ========================================
+  // CARREGAR DADOS
+  // ========================================
+
+  const carregar = useCallback(async () => {
     try {
-      const cuidador = await buscarMeuCuidador();
+      setCarregando(true);
+      setErro("");
+
+      const [cuidador, lista] = await Promise.all([
+        buscarMeuCuidador(),
+        listarPacientesVinculados(),
+      ]);
+
       setNome(cuidador.nome || "");
       setTelefone(cuidador.telefone || "");
-    } catch (erro) {
-      console.error("ERRO COMPLETO DA FAMILIA:", erro);
-      const mensagem =
-        erro instanceof Error
-          ? erro.message
-          : String(erro);
-      Alert.alert(
-        "Erro",
-        "Não foi possível carregar os dados do familiar."
+      setVinculos(lista);
+    } catch (e) {
+      setErro(
+        e instanceof Error
+          ? e.message
+          : "Não foi possível carregar os dados."
       );
     } finally {
       setCarregando(false);
@@ -55,19 +72,20 @@ export default function FamiliaScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      carregarCuidador();
-    }, [carregarCuidador])
+      void carregar();
+    }, [carregar])
   );
 
-  // SALVAR DADOS DO FAMILIAR
-  async function salvar() {
-    if (!nome.trim()) {
-      Alert.alert("Atenção", "Informe o nome do familiar.");
-      return;
-    }
+  // ========================================
+  // SALVAR FAMILIAR
+  // ========================================
 
-    if (!telefone.trim()) {
-      Alert.alert("Atenção", "Informe o telefone do familiar.");
+  async function salvar() {
+    if (!nome.trim() || !telefone.trim()) {
+      Alert.alert(
+        "Atenção",
+        "Informe o nome e o telefone do familiar."
+      );
       return;
     }
 
@@ -83,533 +101,471 @@ export default function FamiliaScreen() {
       setTelefone(atualizado.telefone || "");
 
       Alert.alert(
-        "Salvo com sucesso! 💚",
-        "Os dados do familiar foram atualizados."
+        "Sucesso 💚",
+        "Dados do familiar atualizados!"
       );
-    } catch (erro) {
-      console.error("Erro ao salvar familiar:", erro);
+    } catch (e) {
       Alert.alert(
         "Erro",
-        "Não foi possível salvar os dados."
+        e instanceof Error
+          ? e.message
+          : "Não foi possível salvar."
       );
     } finally {
       setSalvando(false);
     }
   }
 
-  if (carregando) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.carregandoContainer}>
-          <View style={styles.loadingIcon}>
-            <MaterialCommunityIcons
-              name="account-group"
-              size={42}
-              color="#16A34A"
-            />
-          </View>
+  // ========================================
+  // VINCULAR IDOSO
+  // ========================================
 
-          <ActivityIndicator
-            size="large"
-            color="#16A34A"
-          />
+  async function confirmarVinculo() {
+    const codigoLimpo = codigo.trim().toUpperCase();
 
-          <Text style={styles.carregandoTexto}>
-            Carregando área da família...
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
+    if (!/^[A-F0-9]{16}$/.test(codigoLimpo)) {
+      Alert.alert(
+        "Código inválido",
+        "Informe o código de 16 caracteres gerado pelo idoso."
+      );
+      return;
+    }
+
+    try {
+      setVinculando(true);
+
+      await vincularPaciente(codigoLimpo);
+
+      const lista = await listarPacientesVinculados();
+
+      setVinculos(lista);
+      setCodigo("");
+
+      Alert.alert(
+        "Vínculo realizado! 💚",
+        "Agora você pode acompanhar os medicamentos do idoso."
+      );
+    } catch (e) {
+      Alert.alert(
+        "Erro no vínculo",
+        e instanceof Error
+          ? e.message
+          : "Verifique o código e tente novamente."
+      );
+    } finally {
+      setVinculando(false);
+    }
   }
 
+  // ========================================
+  // IDENTIFICAR IDOSO
+  // CORRIGIDO PARA O SERIALIZER DJANGO
+  // ========================================
+
+  function pacienteId(v: VinculoPaciente): number {
+    return v.paciente;
+  }
+
+  function pacienteNome(v: VinculoPaciente): string {
+    return v.paciente_nome || `Paciente #${v.paciente}`;
+  }
+
+  // ========================================
+  // ABRIR MEDICAMENTOS
+  // ========================================
+
+  function abrirMedicamentos(id: number) {
+    if (!Number.isInteger(id) || id <= 0) {
+      Alert.alert(
+        "Erro",
+        "Não foi possível identificar o idoso."
+      );
+      return;
+    }
+
+    router.push({
+      pathname: "/medicamentos",
+      params: {
+        perfil: "familiar",
+        pacienteId: String(id),
+      },
+    });
+  }
+
+  // ========================================
+  // INTERFACE
+  // ========================================
+
   return (
-    <SafeAreaView
-      style={styles.container}
-      edges={["top"]}
-    >
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={
-          Platform.OS === "ios"
-            ? "padding"
-            : undefined
-        }
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* BARRA SUPERIOR */}
-          <View style={styles.topBar}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name="chevron-back"
-                size={26}
-                color="#2563EB"
-              />
-            </TouchableOpacity>
+          {/* VOLTAR */}
 
-            <View style={styles.topIcon}>
-              <MaterialCommunityIcons
-                name="account-group"
-                size={27}
-                color="#16A34A"
-              />
-            </View>
-          </View>
-
-          {/* CABEÇALHO */}
-          <View style={styles.header}>
-            <Text style={styles.title}>
-              Área da família
-            </Text>
-
-            <Text style={styles.subtitle}>
-              Acompanhe a rotina e mantenha
-              os dados do familiar responsável
-              atualizados.
-            </Text>
-          </View>
-
-          {/* CARTÃO PRINCIPAL */}
-          <View style={styles.heroCard}>
-            <View style={styles.heroIcon}>
-              <MaterialCommunityIcons
-                name="account-heart"
-                size={44}
-                color="#16A34A"
-              />
-            </View>
-
-            <View style={styles.heroContent}>
-              <Text style={styles.heroLabel}>
-                FAMÍLIA
-              </Text>
-
-              <Text style={styles.heroTitle}>
-                Cuidando de quem você ama
-              </Text>
-
-              <Text style={styles.heroDescription}>
-                Acompanhe medicamentos,
-                confirmações e alertas.
-              </Text>
-            </View>
-          </View>
-
-          {/* CADASTRO DO FAMILIAR */}
-          <Text style={styles.sectionTitle}>
-            Familiar responsável
-          </Text>
-
-          <View style={styles.formCard}>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardHeaderIcon}>
-                <Ionicons
-                  name="person-outline"
-                  size={24}
-                  color="#2563EB"
-                />
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>
-                  Dados do familiar
-                </Text>
-
-                <Text style={styles.cardSubtitle}>
-                  Informe quem receberá os alertas
-                </Text>
-              </View>
-            </View>
-
-            <Text style={styles.label}>
-              Nome
-            </Text>
-
-            <View style={styles.inputContainer}>
-              <Ionicons
-                name="person-outline"
-                size={21}
-                color="#64748B"
-              />
-
-              <TextInput
-                style={styles.input}
-                value={nome}
-                onChangeText={setNome}
-                placeholder="Nome do familiar"
-                placeholderTextColor="#94A3B8"
-              />
-            </View>
-
-            <Text style={styles.label}>
-              Telefone / WhatsApp
-            </Text>
-
-            <View style={styles.inputContainer}>
-              <Ionicons
-                name="logo-whatsapp"
-                size={22}
-                color="#16A34A"
-              />
-
-              <TextInput
-                style={styles.input}
-                value={telefone}
-                onChangeText={setTelefone}
-                placeholder="Ex.: 81999999999"
-                placeholderTextColor="#94A3B8"
-                keyboardType="phone-pad"
-              />
-            </View>
-
-            <View style={styles.infoBox}>
-              <Ionicons
-                name="information-circle-outline"
-                size={21}
-                color="#2563EB"
-              />
-
-              <Text style={styles.infoText}>
-                Este telefone poderá ser utilizado
-                para receber os alertas do LembraFácil.
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.botaoSalvar,
-                salvando && styles.botaoDesabilitado,
-              ]}
-              disabled={salvando}
-              onPress={salvar}
-              activeOpacity={0.85}
-            >
-              {salvando ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={24}
-                    color="#FFFFFF"
-                  />
-
-                  <Text style={styles.botaoSalvarTexto}>
-                    SALVAR FAMILIAR
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* ACOMPANHAMENTO */}
-          <Text style={styles.sectionTitle}>
-            Acompanhamento
-          </Text>
-
-          {/* ROTINA */}
           <TouchableOpacity
-            style={[
-              styles.optionCard,
-              styles.rotinaCard,
-            ]}
-            activeOpacity={0.85}
-            onPress={() => router.push("/rotina")}
+            style={styles.voltar}
+            onPress={() => router.back()}
           >
-            <View
-              style={[
-                styles.optionIcon,
-                styles.rotinaIcon,
-              ]}
-            >
-              <Ionicons
-                name="calendar-outline"
-                size={29}
-                color="#2563EB"
-              />
-            </View>
-
-            <View style={styles.optionContent}>
-              <View style={styles.statusRow}>
-                <View style={styles.statusDot} />
-
-                <Text style={styles.statusLabel}>
-                  ACOMPANHAMENTO ATIVO
-                </Text>
-              </View>
-
-              <Text style={styles.optionTitle}>
-                Rotina de hoje
-              </Text>
-
-              <Text style={styles.optionDescription}>
-                Veja horários e confirmações
-                dos medicamentos.
-              </Text>
-            </View>
-
-            <View style={styles.blueArrow}>
-              <Ionicons
-                name="chevron-forward"
-                size={22}
-                color="#2563EB"
-              />
-            </View>
-          </TouchableOpacity>
-
-          {/* MEDICAMENTOS */}
-          <TouchableOpacity
-            style={[
-              styles.optionCard,
-              styles.medicamentoCard,
-            ]}
-            activeOpacity={0.85}
-            onPress={() => router.push("/medicamentos")}
-          >
-            <View
-              style={[
-                styles.optionIcon,
-                styles.medicamentoIcon,
-              ]}
-            >
-              <MaterialCommunityIcons
-                name="pill"
-                size={31}
-                color="#E53935"
-              />
-            </View>
-
-            <View style={styles.optionContent}>
-              <Text style={styles.optionTitle}>
-                Medicamentos
-              </Text>
-
-              <Text style={styles.optionDescription}>
-                Consulte os medicamentos
-                cadastrados no LembraFácil.
-              </Text>
-            </View>
-
-            <View style={styles.redArrow}>
-              <Ionicons
-                name="chevron-forward"
-                size={22}
-                color="#E53935"
-              />
-            </View>
-          </TouchableOpacity>
-
-          {/* ALERTAS */}
-          <View
-            style={[
-              styles.optionCard,
-              styles.alertaCard,
-            ]}
-          >
-            <View
-              style={[
-                styles.optionIcon,
-                styles.alertaIcon,
-              ]}
-            >
-              <Ionicons
-                name="notifications-outline"
-                size={29}
-                color="#F59E0B"
-              />
-            </View>
-
-            <View style={styles.optionContent}>
-              <Text style={styles.optionTitle}>
-                Alertas
-              </Text>
-
-              <Text style={styles.optionDescription}>
-                O familiar poderá ser avisado
-                quando houver um medicamento atrasado.
-              </Text>
-            </View>
-          </View>
-
-          {/* NOVAS OPÇÕES DE FARMÁCIAS */}
-          <Text style={styles.sectionTitle}>
-            Farmácias e medicamentos
-          </Text>
-
-          <Text style={styles.farmaciasIntro}>
-            Encontre farmácias parceiras, consulte
-            medicamentos e preços e acompanhe
-            a reposição.
-          </Text>
-
-          {/* ENCONTRAR FARMÁCIAS */}
-          <TouchableOpacity
-            style={styles.farmaciaOpcao}
-            activeOpacity={0.85}
-            onPress={() =>
-              router.push("/farmacias-busca")
-            }
-          >
-            <View
-              style={[
-                styles.farmaciaOpcaoIcone,
-                styles.buscaFundo,
-              ]}
-            >
-              <Ionicons
-                name="search-outline"
-                size={34}
-                color="#2563EB"
-              />
-            </View>
-
-            <View style={styles.optionContent}>
-              <Text style={styles.optionTitle}>
-                Encontrar farmácias
-              </Text>
-
-              <Text style={styles.optionDescription}>
-                Pesquise medicamentos, compare preços
-                e consulte as farmácias disponíveis.
-              </Text>
-            </View>
-
             <Ionicons
-              name="chevron-forward"
-              size={26}
+              name="chevron-back"
+              size={24}
               color="#2563EB"
             />
+            <Text style={styles.voltarTexto}>Voltar</Text>
           </TouchableOpacity>
 
-          {/* MAPA */}
-          <TouchableOpacity
-            style={styles.farmaciaOpcao}
-            activeOpacity={0.85}
-            onPress={() =>
-              router.push("/farmacias-mapa")
-            }
-          >
-            <View
-              style={[
-                styles.farmaciaOpcaoIcone,
-                styles.mapaFundo,
-              ]}
-            >
-              <Ionicons
-                name="map-outline"
-                size={34}
-                color="#7C3AED"
-              />
-            </View>
+          {/* CABEÇALHO */}
 
-            <View style={styles.optionContent}>
-              <Text style={styles.optionTitle}>
-                Ver farmácias no mapa
-              </Text>
+          <Text style={styles.titulo}>Área da família 💚</Text>
 
-              <Text style={styles.optionDescription}>
-                Visualize a localização das farmácias
-                parceiras e descubra como chegar.
-              </Text>
-            </View>
+          <Text style={styles.subtitulo}>
+            Cuide de quem você ama, acompanhe medicamentos
+            e mantenha seus dados atualizados.
+          </Text>
 
-            <Ionicons
-              name="chevron-forward"
-              size={26}
-              color="#7C3AED"
+          {/* DESTAQUE */}
+
+          <View style={styles.hero}>
+            <MaterialCommunityIcons
+              name="account-heart"
+              size={43}
+              color="#16A34A"
             />
-          </TouchableOpacity>
-
-          {/* REPOSIÇÃO */}
-          <TouchableOpacity
-            style={styles.farmaciaOpcao}
-            activeOpacity={0.85}
-            onPress={() =>
-              router.push("/farmacias-reposicao")
-            }
-          >
-            <View
-              style={[
-                styles.farmaciaOpcaoIcone,
-                styles.reposicaoFundo,
-              ]}
-            >
-              <Ionicons
-                name="notifications-outline"
-                size={34}
-                color="#D97706"
-              />
-            </View>
-
-            <View style={styles.optionContent}>
-              <Text style={styles.optionTitle}>
-                Reposição de medicamentos
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroTitulo}>
+                Cuidando de quem você ama
               </Text>
-
-              <Text style={styles.optionDescription}>
-                Acompanhe o estoque e as solicitações
-                de reposição dos medicamentos.
-              </Text>
-            </View>
-
-            <Ionicons
-              name="chevron-forward"
-              size={26}
-              color="#D97706"
-            />
-          </TouchableOpacity>
-
-          {/* RODAPÉ */}
-          <View style={styles.footerCard}>
-            <View style={styles.footerItem}>
-              <Ionicons
-                name="shield-checkmark"
-                size={21}
-                color="#16A34A"
-              />
-              <Text style={styles.footerText}>
-                Cuidado{"\n"}e segurança
-              </Text>
-            </View>
-
-            <View style={styles.footerDivider} />
-
-            <View style={styles.footerItem}>
-              <Ionicons
-                name="notifications"
-                size={21}
-                color="#16A34A"
-              />
-              <Text style={styles.footerText}>
-                Alertas{"\n"}importantes
-              </Text>
-            </View>
-
-            <View style={styles.footerDivider} />
-
-            <View style={styles.footerItem}>
-              <Ionicons
-                name="heart"
-                size={21}
-                color="#16A34A"
-              />
-              <Text style={styles.footerText}>
-                Sempre{"\n"}por perto
+              <Text style={styles.texto}>
+                Compartilhe a rotina de medicamentos com segurança.
               </Text>
             </View>
           </View>
+
+          {carregando ? (
+            <ActivityIndicator
+              size="large"
+              color="#16A34A"
+              style={{ marginVertical: 28 }}
+            />
+          ) : (
+            <>
+              {/* ERRO */}
+
+              {!!erro && (
+                <View style={styles.aviso}>
+                  <Text style={styles.avisoTexto}>{erro}</Text>
+                  <TouchableOpacity onPress={() => void carregar()}>
+                    <Text style={styles.link}>Tentar novamente</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* FAMILIAR */}
+
+              <Text style={styles.secao}>Familiar responsável</Text>
+
+              <View style={styles.card}>
+                <Text style={styles.label}>Nome</Text>
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Nome do familiar"
+                  placeholderTextColor="#94A3B8"
+                  value={nome}
+                  onChangeText={setNome}
+                />
+
+                <Text style={styles.label}>Telefone / WhatsApp</Text>
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Ex.: 81999999999"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="phone-pad"
+                  value={telefone}
+                  onChangeText={setTelefone}
+                />
+
+                <Text style={styles.ajuda}>
+                  Este número poderá ser utilizado futuramente
+                  para receber alertas.
+                </Text>
+
+                <TouchableOpacity
+                  style={[
+                    styles.botaoVerde,
+                    salvando && styles.desabilitado,
+                  ]}
+                  disabled={salvando}
+                  onPress={salvar}
+                >
+                  {salvando ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <Text style={styles.botaoTexto}>
+                      SALVAR FAMILIAR
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* CÓDIGO DE VINCULAÇÃO */}
+
+              <Text style={styles.secao}>Vincular um idoso</Text>
+
+              <View style={styles.card}>
+                <Text style={styles.cardTitulo}>
+                  🔗 Código de vinculação
+                </Text>
+
+                <Text style={styles.texto}>
+                  Peça ao idoso o código gerado na conta dele.
+                  O código é de uso único e vale por 10 minutos.
+                </Text>
+
+                <TextInput
+                  style={[styles.input, { marginTop: 15 }]}
+                  placeholder="Código de 16 caracteres"
+                  placeholderTextColor="#94A3B8"
+                  value={codigo}
+                  onChangeText={(texto) =>
+                    setCodigo(
+                      texto
+                        .toUpperCase()
+                        .replace(/[^A-F0-9]/g, "")
+                        .slice(0, 16)
+                    )
+                  }
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  maxLength={16}
+                />
+
+                <TouchableOpacity
+                  style={[
+                    styles.botaoAzul,
+                    vinculando && styles.desabilitado,
+                  ]}
+                  disabled={vinculando}
+                  onPress={confirmarVinculo}
+                >
+                  {vinculando ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <Text style={styles.botaoTexto}>
+                      VINCULAR IDOSO
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* IDOSOS VINCULADOS */}
+
+              <Text style={styles.secao}>Idosos vinculados</Text>
+
+              {vinculos.filter((v) => v.ativo !== false).length === 0 ? (
+                <View style={styles.card}>
+                  <Text style={styles.texto}>
+                    Nenhum idoso vinculado ainda.
+                    Informe o código acima para começar.
+                  </Text>
+                </View>
+              ) : (
+                vinculos
+                  .filter((v) => v.ativo !== false)
+                  .map((v) => (
+                    <View
+                      key={v.id}
+                      style={styles.pacienteCard}
+                    >
+                      <View style={styles.pacienteLinha}>
+                        <Ionicons
+                          name="person-circle-outline"
+                          size={35}
+                          color="#16A34A"
+                        />
+
+                        <Text style={styles.pacienteNome}>
+                          {pacienteNome(v)}
+                        </Text>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.botaoAzul}
+                        onPress={() =>
+                          abrirMedicamentos(pacienteId(v))
+                        }
+                      >
+                        <Text style={styles.botaoTexto}>
+                          💊 VER MEDICAMENTOS
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))
+              )}
+
+              {/* ACOMPANHAMENTO */}
+
+              <Text style={styles.secao}>Acompanhamento</Text>
+
+              <TouchableOpacity
+                style={styles.opcao}
+                onPress={() => router.push("/rotina")}
+              >
+                <Ionicons
+                  name="calendar-outline"
+                  size={30}
+                  color="#2563EB"
+                />
+
+                <View style={styles.opcaoConteudo}>
+                  <Text style={styles.cardTitulo}>
+                    Rotina de hoje
+                  </Text>
+                  <Text style={styles.texto}>
+                    Veja horários e confirmações dos medicamentos.
+                  </Text>
+                </View>
+
+                <Ionicons
+                  name="chevron-forward"
+                  size={23}
+                  color="#2563EB"
+                />
+              </TouchableOpacity>
+
+              {/* ALERTAS */}
+
+              <View style={styles.opcao}>
+                <Ionicons
+                  name="notifications-outline"
+                  size={30}
+                  color="#D97706"
+                />
+
+                <View style={styles.opcaoConteudo}>
+                  <Text style={styles.cardTitulo}>Alertas</Text>
+                  <Text style={styles.texto}>
+                    Avisos automáticos ainda dependem da
+                    configuração do serviço.
+                  </Text>
+                </View>
+              </View>
+
+              {/* FARMÁCIAS */}
+
+              <Text style={styles.secao}>
+                Farmácias e medicamentos
+              </Text>
+
+              <Text style={styles.textoSecao}>
+                Encontre farmácias parceiras, consulte
+                medicamentos e acompanhe a reposição.
+              </Text>
+
+              <TouchableOpacity
+                style={styles.opcao}
+                onPress={() => router.push("/farmacias-busca")}
+              >
+                <Ionicons
+                  name="search-outline"
+                  size={31}
+                  color="#2563EB"
+                />
+
+                <View style={styles.opcaoConteudo}>
+                  <Text style={styles.cardTitulo}>
+                    Encontrar farmácias
+                  </Text>
+                  <Text style={styles.texto}>
+                    Pesquise medicamentos e compare preços.
+                  </Text>
+                </View>
+
+                <Ionicons
+                  name="chevron-forward"
+                  size={23}
+                  color="#2563EB"
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.opcao}
+                onPress={() => router.push("/farmacias-mapa")}
+              >
+                <Ionicons
+                  name="map-outline"
+                  size={31}
+                  color="#7C3AED"
+                />
+
+                <View style={styles.opcaoConteudo}>
+                  <Text style={styles.cardTitulo}>
+                    Ver farmácias no mapa
+                  </Text>
+                  <Text style={styles.texto}>
+                    Localize farmácias parceiras.
+                  </Text>
+                </View>
+
+                <Ionicons
+                  name="chevron-forward"
+                  size={23}
+                  color="#7C3AED"
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.opcao}
+                onPress={() => router.push("/farmacias-reposicao")}
+              >
+                <Ionicons
+                  name="notifications-outline"
+                  size={31}
+                  color="#D97706"
+                />
+
+                <View style={styles.opcaoConteudo}>
+                  <Text style={styles.cardTitulo}>
+                    Reposição de medicamentos
+                  </Text>
+                  <Text style={styles.texto}>
+                    Acompanhe estoque e solicitações.
+                  </Text>
+                </View>
+
+                <Ionicons
+                  name="chevron-forward"
+                  size={23}
+                  color="#D97706"
+                />
+              </TouchableOpacity>
+
+              {/* RODAPÉ */}
+
+              <View style={styles.rodape}>
+                <Text style={styles.rodapeTexto}>
+                  🛡️ Cuidado e segurança   💚 Sempre por perto
+                </Text>
+              </View>
+            </>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
+
+// ========================================
+// ESTILOS
+// ========================================
 
 const styles = StyleSheet.create({
   container: {
@@ -617,172 +573,76 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FBFF",
   },
 
-  carregandoContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 30,
-  },
-
-  loadingIcon: {
-    width: 82,
-    height: 82,
-    borderRadius: 27,
-    backgroundColor: "#E8F9EE",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 20,
-  },
-
-  carregandoTexto: {
-    marginTop: 15,
-    color: "#64748B",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-
   content: {
     paddingHorizontal: 18,
     paddingTop: 12,
-    paddingBottom: 35,
+    paddingBottom: 40,
   },
 
-  topBar: {
+  voltar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     marginBottom: 20,
   },
 
-  backButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 3,
+  voltarTexto: {
+    color: "#2563EB",
+    fontSize: 16,
+    fontWeight: "800",
   },
 
-  topIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 16,
-    backgroundColor: "#E8F9EE",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  header: {
-    marginBottom: 20,
-  },
-
-  title: {
+  titulo: {
     color: "#0F2557",
     fontSize: 31,
     fontWeight: "900",
-    letterSpacing: -0.5,
   },
 
-  subtitle: {
+  subtitulo: {
     color: "#64748B",
     fontSize: 15,
     lineHeight: 22,
-    fontWeight: "500",
-    marginTop: 6,
-  },
-
-  heroCard: {
-    minHeight: 130,
-    backgroundColor: "#E8F9EE",
-    borderRadius: 25,
-    padding: 17,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: "#D7F2E1",
-    elevation: 3,
-  },
-
-  heroIcon: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: "#D3F3DF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 14,
-  },
-
-  heroContent: {
-    flex: 1,
-  },
-
-  heroLabel: {
-    color: "#16A34A",
-    fontSize: 13,
-    fontWeight: "900",
-    marginBottom: 3,
-  },
-
-  heroTitle: {
-    color: "#0F2557",
-    fontSize: 20,
-    lineHeight: 24,
-    fontWeight: "900",
-  },
-
-  heroDescription: {
-    color: "#64748B",
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 4,
-  },
-
-  sectionTitle: {
-    color: "#0F2557",
-    fontSize: 22,
-    fontWeight: "900",
-    marginBottom: 12,
-  },
-
-  formCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 17,
-    marginBottom: 25,
-    borderWidth: 1,
-    borderColor: "#E8EEF5",
-    elevation: 3,
-  },
-
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
+    marginTop: 7,
     marginBottom: 18,
   },
 
-  cardHeaderIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: "#E4F1FF",
+  hero: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    marginRight: 11,
+    gap: 14,
+    backgroundColor: "#E8F9EE",
+    borderRadius: 24,
+    padding: 19,
+    marginBottom: 24,
   },
 
-  cardTitle: {
+  heroTitulo: {
+    color: "#0F2557",
+    fontSize: 20,
+    fontWeight: "900",
+    marginBottom: 5,
+  },
+
+  secao: {
+    color: "#0F2557",
+    fontSize: 22,
+    fontWeight: "900",
+    marginTop: 8,
+    marginBottom: 12,
+  },
+
+  card: {
+    backgroundColor: "#FFF",
+    borderRadius: 22,
+    padding: 18,
+    marginBottom: 22,
+    elevation: 2,
+  },
+
+  cardTitulo: {
     color: "#0F2557",
     fontSize: 18,
-    fontWeight: "900",
-  },
-
-  cardSubtitle: {
-    color: "#64748B",
-    fontSize: 12,
-    marginTop: 2,
+    fontWeight: "800",
+    marginBottom: 5,
   },
 
   label: {
@@ -790,244 +650,132 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     marginBottom: 7,
-    marginTop: 6,
-  },
-
-  inputContainer: {
-    minHeight: 57,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFC",
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
+    marginTop: 8,
   },
 
   input: {
-    flex: 1,
-    fontSize: 16,
-    color: "#0F172A",
-    paddingHorizontal: 10,
-    paddingVertical: 14,
-  },
-
-  infoBox: {
-    backgroundColor: "#EFF6FF",
-    borderRadius: 14,
-    padding: 12,
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginTop: 4,
-  },
-
-  infoText: {
-    flex: 1,
-    color: "#475569",
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: "600",
-    marginLeft: 8,
-  },
-
-  botaoSalvar: {
-    minHeight: 59,
-    backgroundColor: "#16A34A",
-    borderRadius: 18,
-    marginTop: 17,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 9,
-    elevation: 4,
-  },
-
-  botaoDesabilitado: {
-    opacity: 0.6,
-  },
-
-  botaoSalvarTexto: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "900",
-  },
-
-  optionCard: {
-    minHeight: 118,
-    borderRadius: 22,
-    padding: 15,
-    marginBottom: 13,
-    flexDirection: "row",
-    alignItems: "center",
+    minHeight: 55,
+    backgroundColor: "#F8FAFC",
     borderWidth: 1,
-    borderColor: "#E8EEF5",
-    elevation: 2,
+    borderColor: "#E2E8F0",
+    borderRadius: 15,
+    paddingHorizontal: 14,
+    fontSize: 16,
+    marginBottom: 12,
+    color: "#0F172A",
   },
 
-  rotinaCard: {
-    backgroundColor: "#F0F7FF",
-    borderColor: "#DCEBFF",
-  },
-
-  medicamentoCard: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#F1E5E5",
-  },
-
-  alertaCard: {
-    backgroundColor: "#FFFBEB",
-    borderColor: "#FDE7B0",
-  },
-
-  optionIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 13,
-  },
-
-  rotinaIcon: {
-    backgroundColor: "#DDEEFF",
-  },
-
-  medicamentoIcon: {
-    backgroundColor: "#FFEAEA",
-  },
-
-  alertaIcon: {
-    backgroundColor: "#FEF3C7",
-  },
-
-  optionContent: {
-    flex: 1,
-  },
-
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 3,
-  },
-
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: "#16A34A",
-    marginRight: 5,
-  },
-
-  statusLabel: {
-    color: "#16A34A",
-    fontSize: 10,
-    fontWeight: "900",
-  },
-
-  optionTitle: {
-    color: "#0F2557",
-    fontSize: 18,
-    fontWeight: "900",
-  },
-
-  optionDescription: {
-    color: "#64748B",
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 4,
-    paddingRight: 4,
-  },
-
-  blueArrow: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#E0EFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 7,
-  },
-
-  redArrow: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#FFEAEA",
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 7,
-  },
-
-  // ESTILOS DAS NOVAS OPÇÕES
-  farmaciasIntro: {
+  texto: {
     color: "#64748B",
     fontSize: 14,
     lineHeight: 20,
-    marginBottom: 15,
   },
 
-  farmaciaOpcao: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 24,
-    padding: 15,
-    marginBottom: 15,
-    minHeight: 120,
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E8EEF5",
-    elevation: 3,
+  textoSecao: {
+    color: "#64748B",
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 14,
   },
 
-  farmaciaOpcaoIcone: {
-    width: 74,
-    height: 78,
-    borderRadius: 22,
-    alignItems: "center",
+  ajuda: {
+    color: "#64748B",
+    fontSize: 12,
+    marginVertical: 8,
+  },
+
+  botaoVerde: {
+    minHeight: 55,
+    borderRadius: 16,
+    backgroundColor: "#16A34A",
     justifyContent: "center",
-    marginRight: 14,
-  },
-
-  buscaFundo: {
-    backgroundColor: "#E3F1FF",
-  },
-
-  mapaFundo: {
-    backgroundColor: "#F0E7FF",
-  },
-
-  reposicaoFundo: {
-    backgroundColor: "#FFF2D7",
-  },
-
-  footerCard: {
+    alignItems: "center",
     marginTop: 10,
-    borderRadius: 22,
-    paddingVertical: 17,
-    paddingHorizontal: 10,
-    backgroundColor: "#EAF9F0",
+  },
+
+  botaoAzul: {
+    minHeight: 52,
+    borderRadius: 16,
+    backgroundColor: "#2563EB",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 12,
+  },
+
+  botaoTexto: {
+    color: "#FFF",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+
+  desabilitado: {
+    opacity: 0.6,
+  },
+
+  aviso: {
+    backgroundColor: "#FFF1F2",
+    padding: 15,
+    borderRadius: 14,
+    marginBottom: 16,
+  },
+
+  avisoTexto: {
+    color: "#BE123C",
+    fontSize: 14,
+  },
+
+  link: {
+    color: "#2563EB",
+    fontWeight: "800",
+    marginTop: 8,
+  },
+
+  pacienteCard: {
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    padding: 17,
+    marginBottom: 13,
+    elevation: 2,
+  },
+
+  pacienteLinha: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
   },
 
-  footerItem: {
-    flex: 1,
+  pacienteNome: {
+    color: "#0F2557",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+
+  opcao: {
+    backgroundColor: "#FFF",
+    borderRadius: 20,
+    padding: 17,
+    flexDirection: "row",
     alignItems: "center",
+    marginBottom: 13,
+    elevation: 2,
   },
 
-  footerText: {
-    color: "#166534",
-    fontSize: 11,
-    lineHeight: 14,
+  opcaoConteudo: {
+    flex: 1,
+    paddingHorizontal: 12,
+  },
+
+  rodape: {
+    backgroundColor: "#EAF9F0",
+    borderRadius: 20,
+    padding: 20,
+    marginTop: 10,
+  },
+
+  rodapeTexto: {
     textAlign: "center",
-    fontWeight: "700",
-    marginTop: 5,
-  },
-
-  footerDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: "#B7E4C7",
+    color: "#166534",
+    fontSize: 13,
+    fontWeight: "800",
   },
 });

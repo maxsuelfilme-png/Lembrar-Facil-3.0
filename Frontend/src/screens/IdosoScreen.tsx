@@ -1,4 +1,6 @@
 
+import React, { useEffect, useState } from "react";
+
 import {
   View,
   Text,
@@ -6,6 +8,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -16,10 +19,77 @@ import {
   MaterialCommunityIcons,
 } from "@expo/vector-icons";
 
+import { iniciarSessaoIdoso } from "../services/authService";
+
 export default function IdosoScreen() {
   const router = useRouter();
 
-  const confirmarSOS = () => {
+  const [preparando, setPreparando] = useState(true);
+  const [erroSessao, setErroSessao] = useState<string | null>(
+    null
+  );
+
+  // ==================================================
+  // AUTENTICAÇÃO AUTOMÁTICA DO IDOSO
+  // ==================================================
+
+  async function prepararSessao() {
+    try {
+      setPreparando(true);
+      setErroSessao(null);
+
+      await iniciarSessaoIdoso();
+    } catch (erro) {
+      const mensagem =
+        erro instanceof Error
+          ? erro.message
+          : "Não foi possível conectar ao servidor.";
+
+      setErroSessao(mensagem);
+    } finally {
+      setPreparando(false);
+    }
+  }
+
+  useEffect(() => {
+    void prepararSessao();
+  }, []);
+
+  // ==================================================
+  // NAVEGAÇÃO PROTEGIDA
+  // ==================================================
+
+  function abrirArea(
+    destino: "/receita" | "/medicamentos" | "/rotina"
+  ) {
+    if (preparando || erroSessao) {
+      Alert.alert(
+        "Acesso indisponível",
+        "Aguarde a conexão com o servidor."
+      );
+      return;
+    }
+
+    // Medicamentos usa a sessão do idoso
+    if (destino === "/medicamentos") {
+      router.push({
+        pathname: "/medicamentos",
+        params: {
+          perfil: "idoso",
+        },
+      });
+
+      return;
+    }
+
+    router.push(destino);
+  }
+
+  // ==================================================
+  // BOTÃO SOS
+  // ==================================================
+
+  function confirmarSOS() {
     Alert.alert(
       "Pedido de ajuda",
       "Deseja avisar seu familiar que precisa de ajuda?",
@@ -39,7 +109,11 @@ export default function IdosoScreen() {
         },
       ]
     );
-  };
+  }
+
+  // ==================================================
+  // INTERFACE
+  // ==================================================
 
   return (
     <SafeAreaView style={styles.container}>
@@ -47,6 +121,8 @@ export default function IdosoScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* BARRA SUPERIOR */}
+
         <View style={styles.topBar}>
           <TouchableOpacity
             style={styles.voltarButton}
@@ -57,29 +133,74 @@ export default function IdosoScreen() {
               size={23}
               color="#2563EB"
             />
+
             <Text style={styles.voltar}>Voltar</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.settingsButton}>
+          <View style={styles.settingsButton}>
             <Ionicons
               name="settings-outline"
               size={26}
               color="#64748B"
             />
-          </TouchableOpacity>
+          </View>
         </View>
+
+        {/* BOAS-VINDAS */}
 
         <View style={styles.welcome}>
           <Text style={styles.title}>Olá! 👋</Text>
+
           <Text style={styles.subtitle}>
             Vamos cuidar da sua rotina.
           </Text>
         </View>
 
+        {/* STATUS DA SESSÃO */}
+
+        {preparando && (
+          <View style={styles.statusBox}>
+            <ActivityIndicator
+              size="large"
+              color="#2563EB"
+            />
+
+            <Text style={styles.statusText}>
+              Preparando seu acesso...
+            </Text>
+          </View>
+        )}
+
+        {erroSessao && (
+          <View style={styles.erroBox}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={30}
+              color="#DC2626"
+            />
+
+            <Text style={styles.erroTexto}>
+              {erroSessao}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.tentarButton}
+              onPress={() => void prepararSessao()}
+            >
+              <Text style={styles.tentarTexto}>
+                Tentar novamente
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* LER RECEITA */}
+
         <TouchableOpacity
           style={[styles.card, styles.receitaCard]}
           activeOpacity={0.85}
-          onPress={() => router.push("/receita")}
+          disabled={preparando || !!erroSessao}
+          onPress={() => abrirArea("/receita")}
         >
           <View style={[styles.iconBox, styles.receitaIcon]}>
             <Ionicons
@@ -93,8 +214,10 @@ export default function IdosoScreen() {
             <Text style={styles.cardTitle}>
               Ler receita
             </Text>
+
             <Text style={styles.cardText}>
-              Tire uma foto da sua receita para cadastrar os medicamentos
+              Tire uma foto da sua receita para cadastrar
+              os medicamentos
             </Text>
           </View>
 
@@ -107,12 +230,17 @@ export default function IdosoScreen() {
           </View>
         </TouchableOpacity>
 
+        {/* MEUS MEDICAMENTOS */}
+
         <TouchableOpacity
           style={[styles.card, styles.medicamentoCard]}
           activeOpacity={0.85}
-          onPress={() => router.push("/medicamentos")}
+          disabled={preparando || !!erroSessao}
+          onPress={() => abrirArea("/medicamentos")}
         >
-          <View style={[styles.iconBox, styles.medicamentoIcon]}>
+          <View
+            style={[styles.iconBox, styles.medicamentoIcon]}
+          >
             <MaterialCommunityIcons
               name="pill"
               size={42}
@@ -124,6 +252,7 @@ export default function IdosoScreen() {
             <Text style={styles.cardTitle}>
               Meus medicamentos
             </Text>
+
             <Text style={styles.cardText}>
               Veja seus medicamentos e horários
             </Text>
@@ -138,10 +267,13 @@ export default function IdosoScreen() {
           </View>
         </TouchableOpacity>
 
+        {/* MINHA ROTINA */}
+
         <TouchableOpacity
           style={[styles.card, styles.rotinaCard]}
           activeOpacity={0.85}
-          onPress={() => router.push("/rotina")}
+          disabled={preparando || !!erroSessao}
+          onPress={() => abrirArea("/rotina")}
         >
           <View style={[styles.iconBox, styles.rotinaIcon]}>
             <Ionicons
@@ -155,6 +287,7 @@ export default function IdosoScreen() {
             <Text style={styles.cardTitle}>
               Minha rotina
             </Text>
+
             <Text style={styles.cardText}>
               Confira o que precisa fazer hoje
             </Text>
@@ -168,6 +301,8 @@ export default function IdosoScreen() {
             />
           </View>
         </TouchableOpacity>
+
+        {/* SOS */}
 
         <TouchableOpacity
           style={styles.sos}
@@ -185,6 +320,7 @@ export default function IdosoScreen() {
             <Text style={styles.sosTitle}>
               PRECISO DE AJUDA
             </Text>
+
             <Text style={styles.sosText}>
               Avise meu familiar
             </Text>
@@ -199,6 +335,8 @@ export default function IdosoScreen() {
           </View>
         </TouchableOpacity>
 
+        {/* RODAPÉ */}
+
         <View style={styles.footer}>
           <View style={styles.footerItem}>
             <Ionicons
@@ -206,6 +344,7 @@ export default function IdosoScreen() {
               size={24}
               color="#16A34A"
             />
+
             <Text style={styles.footerText}>
               Simples{"\n"}de usar
             </Text>
@@ -219,6 +358,7 @@ export default function IdosoScreen() {
               size={24}
               color="#16A34A"
             />
+
             <Text style={styles.footerText}>
               Cuidando{"\n"}de você
             </Text>
@@ -232,6 +372,7 @@ export default function IdosoScreen() {
               size={24}
               color="#16A34A"
             />
+
             <Text style={styles.footerText}>
               Sempre{"\n"}com você
             </Text>
@@ -241,6 +382,10 @@ export default function IdosoScreen() {
     </SafeAreaView>
   );
 }
+
+// ======================================================
+// ESTILOS
+// ======================================================
 
 const styles = StyleSheet.create({
   container: {
@@ -306,6 +451,49 @@ const styles = StyleSheet.create({
     color: "#64748B",
     fontWeight: "600",
     marginTop: 6,
+  },
+
+  statusBox: {
+    backgroundColor: "#EAF4FF",
+    padding: 20,
+    borderRadius: 20,
+    alignItems: "center",
+    marginBottom: 18,
+  },
+
+  statusText: {
+    marginTop: 12,
+    color: "#2563EB",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+
+  erroBox: {
+    backgroundColor: "#FFF1F2",
+    padding: 18,
+    borderRadius: 20,
+    alignItems: "center",
+    marginBottom: 18,
+  },
+
+  erroTexto: {
+    color: "#BE123C",
+    fontSize: 15,
+    textAlign: "center",
+    marginVertical: 12,
+  },
+
+  tentarButton: {
+    backgroundColor: "#2563EB",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
+
+  tentarTexto: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+    fontSize: 15,
   },
 
   card: {

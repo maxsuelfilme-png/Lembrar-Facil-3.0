@@ -3,6 +3,8 @@ import {
   API_URL,
   obterTokenValido,
   renovarAccessToken,
+  obterTokenValidoIdoso,
+  renovarAccessTokenIdoso,
 } from "./authService";
 
 // ======================================================
@@ -19,6 +21,15 @@ export type Medicamento = {
   duracao: string;
 };
 
+export type DadosMedicamento = Omit<Medicamento, "id">;
+
+export type PerfilMedicamentos = "idoso" | "familiar";
+
+export type OpcoesMedicamentos = {
+  perfil?: PerfilMedicamentos;
+  pacienteId?: number;
+};
+
 type MedicamentoAPI = {
   id: number;
   nome: string;
@@ -33,19 +44,24 @@ type MedicamentoAPI = {
 };
 
 // ======================================================
-// CONVERTER API -> APP
+// ENDPOINT
 // ======================================================
 
-function converterDaAPI(
-  item: MedicamentoAPI
-): Medicamento {
+const MEDICAMENTOS_URL =
+  `${API_URL.replace(/\/$/, "")}/medicamentos/`;
+
+// ======================================================
+// CONVERTER DADOS DO DJANGO PARA O APLICATIVO
+// ======================================================
+
+function converterDaAPI(item: MedicamentoAPI): Medicamento {
   return {
     id: String(item.id),
     medicamento: item.nome ?? "",
     dosagem: item.dose ?? "",
     quantidade: String(item.quantidade ?? ""),
     horario: item.horario
-      ? item.horario.substring(0, 5)
+      ? String(item.horario).substring(0, 5)
       : "",
     frequencia: item.frequencia ?? "",
     duracao: item.duracao ?? "",
@@ -66,7 +82,7 @@ function normalizarHorario(horario: string): string {
   let minutos = 0;
 
   const comSeparador = valor.match(
-    /^(\d{1,2})(?:[:h.](\d{1,2})?)?(?::\d{2})?$/
+    /^(\d{1,2})(?:[:h.](\d{1,2}))?$/
   );
 
   const compacto = valor.match(/^(\d{2})(\d{2})$/);
@@ -83,7 +99,14 @@ function normalizarHorario(horario: string): string {
     );
   }
 
-  if (horas > 23 || minutos > 59) {
+  if (
+    !Number.isInteger(horas) ||
+    !Number.isInteger(minutos) ||
+    horas < 0 ||
+    horas > 23 ||
+    minutos < 0 ||
+    minutos > 59
+  ) {
     throw new Error(
       "Horário inválido. Use o formato 08:00."
     );
@@ -98,14 +121,12 @@ function normalizarHorario(horario: string): string {
 }
 
 // ======================================================
-// CONVERTER APP -> API
+// CONVERTER DADOS DO APLICATIVO PARA O DJANGO
 // ======================================================
 
-function converterParaAPI(
-  medicamento: Omit<Medicamento, "id">
-) {
+function converterParaAPI(medicamento: DadosMedicamento) {
   if (!medicamento.medicamento.trim()) {
-    throw new Error("Informe o medicamento.");
+    throw new Error("Informe o nome do medicamento.");
   }
 
   if (!medicamento.dosagem.trim()) {
@@ -131,7 +152,7 @@ function converterParaAPI(
 }
 
 // ======================================================
-// MENSAGEM REAL DO BACKEND
+// TRATAR ERROS DA API
 // ======================================================
 
 async function obterMensagemErro(
@@ -173,18 +194,74 @@ async function obterMensagemErro(
 }
 
 // ======================================================
+// VALIDAR PERFIL E PACIENTE
+// ======================================================
+
+function validarOpcoes(
+  opcoes: OpcoesMedicamentos
+): PerfilMedicamentos {
+  const perfil = opcoes.perfil;
+
+  if (perfil !== "idoso" && perfil !== "familiar") {
+    throw new Error(
+      "Perfil não informado. Abra os medicamentos pela área do idoso ou do familiar."
+    );
+  }
+
+  if (perfil === "familiar") {
+    if (
+      !Number.isInteger(opcoes.pacienteId) ||
+      (opcoes.pacienteId ?? 0) <= 0
+    ) {
+      throw new Error(
+        "Selecione um paciente vinculado antes de cadastrar ou consultar medicamentos."
+      );
+    }
+  }
+
+  return perfil;
+}
+
+// ======================================================
+// TOKEN DE CADA PERFIL
+// ======================================================
+
+async function obterTokenDoPerfil(
+  perfil: PerfilMedicamentos
+): Promise<string | null> {
+  if (perfil === "idoso") {
+    return obterTokenValidoIdoso();
+  }
+
+  return obterTokenValido();
+}
+
+async function renovarTokenDoPerfil(
+  perfil: PerfilMedicamentos
+): Promise<string | null> {
+  if (perfil === "idoso") {
+    return renovarAccessTokenIdoso();
+  }
+
+  return renovarAccessToken();
+}
+
+// ======================================================
 // REQUISIÇÃO AUTENTICADA
 // ======================================================
 
 async function fetchAutenticado(
   url: string,
-  options: RequestInit = {}
+  options: RequestInit,
+  perfil: PerfilMedicamentos
 ): Promise<Response> {
-  let token = await obterTokenValido();
+  let token = await obterTokenDoPerfil(perfil);
 
   if (!token) {
     throw new Error(
-      "É necessário autenticar o paciente para salvar medicamentos no servidor."
+      perfil === "idoso"
+        ? "A sessão do idoso não está ativa. Volte à tela do idoso e tente novamente."
+        : "Faça login como familiar para continuar."
     );
   }
 
@@ -201,11 +278,11 @@ async function fetchAutenticado(
   let response = await enviar(token);
 
   if (response.status === 401) {
-    token = await renovarAccessToken();
+    token = await renovarTokenDoPerfil(perfil);
 
     if (!token) {
       throw new Error(
-        "Sessão expirada. É necessário autenticar novamente."
+        "Sua sessão expirou. Entre novamente no perfil."
       );
     }
 
@@ -216,57 +293,69 @@ async function fetchAutenticado(
 }
 
 // ======================================================
-// CREATE
+// CADASTRAR MEDICAMENTO
 // ======================================================
 
 export async function adicionarMedicamento(
-  medicamento: Omit<Medicamento, "id">
+  medicamento: DadosMedicamento,
+  opcoes: OpcoesMedicamentos
 ): Promise<Medicamento> {
+  const perfil = validarOpcoes(opcoes);
+
   const dados = converterParaAPI(medicamento);
 
+  const corpo =
+    perfil === "familiar"
+      ? {
+          ...dados,
+          paciente_id: opcoes.pacienteId,
+        }
+      : dados;
+
   const response = await fetchAutenticado(
-    `${API_URL.replace(/\/$/, "")}/medicamentos/`,
+    MEDICAMENTOS_URL,
     {
       method: "POST",
-      body: JSON.stringify(dados),
-    }
+      body: JSON.stringify(corpo),
+    },
+    perfil
   );
 
   if (!response.ok) {
     const mensagem = await obterMensagemErro(response);
-
-    console.error(
-      "Erro ao cadastrar medicamento:",
-      response.status,
-      mensagem
-    );
 
     throw new Error(
       `Não foi possível cadastrar (${response.status}): ${mensagem}`
     );
   }
 
-  const resultado: MedicamentoAPI =
-    await response.json();
+  const resultado: MedicamentoAPI = await response.json();
 
   return converterDaAPI(resultado);
 }
 
 // ======================================================
-// READ - LISTAR
+// LISTAR MEDICAMENTOS
 // ======================================================
 
-export async function listarMedicamentos(): Promise<
-  Medicamento[]
-> {
+export async function listarMedicamentos(
+  opcoes: OpcoesMedicamentos
+): Promise<Medicamento[]> {
+  const perfil = validarOpcoes(opcoes);
+
+  const url =
+    perfil === "familiar"
+      ? `${MEDICAMENTOS_URL}?paciente_id=${opcoes.pacienteId}`
+      : MEDICAMENTOS_URL;
+
   const response = await fetchAutenticado(
-    `${API_URL.replace(/\/$/, "")}/medicamentos/`
+    url,
+    {},
+    perfil
   );
 
   if (!response.ok) {
-    throw new Error(
-      await obterMensagemErro(response)
-    );
+    throw new Error(await obterMensagemErro(response));
   }
 
   const resultado = await response.json();
@@ -281,14 +370,19 @@ export async function listarMedicamentos(): Promise<
 }
 
 // ======================================================
-// READ - BUSCAR POR ID
+// BUSCAR MEDICAMENTO PELO ID
 // ======================================================
 
 export async function buscarMedicamento(
-  id: string
+  id: string,
+  opcoes: OpcoesMedicamentos
 ): Promise<Medicamento | null> {
+  const perfil = validarOpcoes(opcoes);
+
   const response = await fetchAutenticado(
-    `${API_URL.replace(/\/$/, "")}/medicamentos/${id}/`
+    `${MEDICAMENTOS_URL}${encodeURIComponent(id)}/`,
+    {},
+    perfil
   );
 
   if (response.status === 404) {
@@ -296,30 +390,34 @@ export async function buscarMedicamento(
   }
 
   if (!response.ok) {
-    throw new Error(
-      await obterMensagemErro(response)
-    );
+    throw new Error(await obterMensagemErro(response));
   }
 
-  return converterDaAPI(await response.json());
+  const resultado: MedicamentoAPI = await response.json();
+
+  return converterDaAPI(resultado);
 }
 
 // ======================================================
-// UPDATE
+// ATUALIZAR MEDICAMENTO
 // ======================================================
 
 export async function atualizarMedicamento(
   id: string,
-  dadosAtualizados: Omit<Medicamento, "id">
+  dadosAtualizados: DadosMedicamento,
+  opcoes: OpcoesMedicamentos
 ): Promise<Medicamento | null> {
+  const perfil = validarOpcoes(opcoes);
+
   const dados = converterParaAPI(dadosAtualizados);
 
   const response = await fetchAutenticado(
-    `${API_URL.replace(/\/$/, "")}/medicamentos/${id}/`,
+    `${MEDICAMENTOS_URL}${encodeURIComponent(id)}/`,
     {
       method: "PATCH",
       body: JSON.stringify(dados),
-    }
+    },
+    perfil
   );
 
   if (response.status === 404) {
@@ -327,26 +425,30 @@ export async function atualizarMedicamento(
   }
 
   if (!response.ok) {
-    throw new Error(
-      await obterMensagemErro(response)
-    );
+    throw new Error(await obterMensagemErro(response));
   }
 
-  return converterDaAPI(await response.json());
+  const resultado: MedicamentoAPI = await response.json();
+
+  return converterDaAPI(resultado);
 }
 
 // ======================================================
-// DELETE
+// EXCLUIR MEDICAMENTO
 // ======================================================
 
 export async function excluirMedicamento(
-  id: string
+  id: string,
+  opcoes: OpcoesMedicamentos
 ): Promise<boolean> {
+  const perfil = validarOpcoes(opcoes);
+
   const response = await fetchAutenticado(
-    `${API_URL.replace(/\/$/, "")}/medicamentos/${id}/`,
+    `${MEDICAMENTOS_URL}${encodeURIComponent(id)}/`,
     {
       method: "DELETE",
-    }
+    },
+    perfil
   );
 
   if (response.status === 404) {
@@ -354,9 +456,7 @@ export async function excluirMedicamento(
   }
 
   if (!response.ok) {
-    throw new Error(
-      await obterMensagemErro(response)
-    );
+    throw new Error(await obterMensagemErro(response));
   }
 
   return true;
