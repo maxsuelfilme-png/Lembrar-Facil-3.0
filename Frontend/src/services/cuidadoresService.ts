@@ -1,7 +1,7 @@
 
 import {
   API_URL,
-  pegarAccessToken,
+  obterTokenValido,
   renovarAccessToken,
 } from "./authService";
 
@@ -17,12 +17,7 @@ async function fetchAutenticado(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  let token = await pegarAccessToken();
-
-  // Tenta recuperar a sessão caso o access token não exista.
-  if (!token) {
-    token = await renovarAccessToken();
-  }
+  let token = await obterTokenValido();
 
   if (!token) {
     throw new Error(
@@ -57,30 +52,47 @@ async function fetchAutenticado(
   return response;
 }
 
-async function lerErro(
-  response: Response
-): Promise<string> {
+async function lerErro(response: Response): Promise<string> {
   const texto = await response.text();
+
+  if (!texto) {
+    return "O servidor não retornou detalhes do erro.";
+  }
 
   try {
     const dados = JSON.parse(texto);
+
+    if (typeof dados.detail === "string") {
+      return dados.detail;
+    }
+
+    if (typeof dados.message === "string") {
+      return dados.message;
+    }
+
     return JSON.stringify(dados);
   } catch {
-    return texto || "Erro desconhecido.";
+    return texto;
   }
 }
 
 export async function buscarMeuCuidador(): Promise<Cuidador> {
-  const response = await fetchAutenticado(URL_FAMILIAR);
+  const response = await fetchAutenticado(URL_FAMILIAR, {
+    method: "GET",
+  });
 
   if (!response.ok) {
     throw new Error(
-      `Erro ao buscar familiar (${response.status}): ` +
-      await lerErro(response)
+      `Erro ao buscar familiar (${response.status}): ${await lerErro(response)}`
     );
   }
 
-  return response.json();
+  const dados: Cuidador = await response.json();
+
+  return {
+    nome: dados.nome || "",
+    telefone: dados.telefone || "",
+  };
 }
 
 export async function atualizarMeuCuidador(
@@ -94,31 +106,30 @@ export async function atualizarMeuCuidador(
     throw new Error("Informe o nome do familiar.");
   }
 
-  if (
-    !/^(?:55)?[1-9][0-9]{10}$/.test(telefoneLimpo)
-  ) {
+  if (!/^(?:55)?[1-9][0-9]{10}$/.test(telefoneLimpo)) {
     throw new Error(
       "Informe um celular válido com DDD. Ex.: 81999999999."
     );
   }
 
-  const response = await fetchAutenticado(
-    URL_FAMILIAR,
-    {
-      method: "PATCH",
-      body: JSON.stringify({
-        nome: nomeLimpo,
-        telefone: telefoneLimpo,
-      }),
-    }
-  );
+  const response = await fetchAutenticado(URL_FAMILIAR, {
+    method: "PATCH",
+    body: JSON.stringify({
+      nome: nomeLimpo,
+      telefone: telefoneLimpo,
+    }),
+  });
 
   if (!response.ok) {
     throw new Error(
-      `Erro ao salvar familiar (${response.status}): ` +
-      await lerErro(response)
+      `Erro ao salvar familiar (${response.status}): ${await lerErro(response)}`
     );
   }
 
-  return response.json();
+  const dados: Cuidador = await response.json();
+
+  return {
+    nome: dados.nome || "",
+    telefone: dados.telefone || "",
+  };
 }

@@ -39,7 +39,11 @@ export default function FamiliaScreen() {
       setNome(cuidador.nome || "");
       setTelefone(cuidador.telefone || "");
     } catch (erro) {
-      console.error("Erro ao carregar familiar:", erro);
+      console.error("ERRO COMPLETO DA FAMILIA:", erro);
+      const mensagem =
+        erro instanceof Error
+          ? erro.message
+          : String(erro);
       Alert.alert(
         "Erro",
         "Não foi possível carregar os dados do familiar."

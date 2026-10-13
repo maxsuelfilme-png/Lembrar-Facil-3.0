@@ -2,11 +2,14 @@
 import React from "react";
 
 import {
+  Image,
+  ImageSourcePropType,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
 
 import {
@@ -16,6 +19,216 @@ import {
 
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+// =====================================================
+// CORES DO LEMBRAFÁCIL
+// =====================================================
+
+const CORES = {
+  fundo: "#F5F9FF",
+  azul: "#087CF5",
+  azulEscuro: "#081D55",
+  verde: "#08B85C",
+  roxo: "#7935E8",
+  texto: "#53647D",
+  branco: "#FFFFFF",
+};
+
+// =====================================================
+// IMAGENS 3D
+// =====================================================
+
+const IMAGENS = {
+  idoso: require("../../assets/images/idoso-3d.png"),
+  familiar: require("../../assets/images/familia-3d.png"),
+  farmacia: require("../../assets/images/farmacia-3d.png"),
+};
+
+// =====================================================
+// TIPOS
+// =====================================================
+
+type NomeIcone =
+  React.ComponentProps<typeof Ionicons>["name"];
+
+type Beneficio = {
+  icone: NomeIcone;
+  titulo: string;
+};
+
+type PerfilProps = {
+  titulo: string;
+  descricao: string;
+  imagem: ImageSourcePropType;
+  cor: string;
+  fundo: string;
+  fundoImagem: string;
+  icone: NomeIcone;
+  beneficios: Beneficio[];
+  onPress: () => void;
+};
+
+// =====================================================
+// ITEM DE BENEFÍCIO
+// =====================================================
+
+function ItemBeneficio({
+  icone,
+  titulo,
+  cor,
+}: {
+  icone: NomeIcone;
+  titulo: string;
+  cor: string;
+}) {
+  return (
+    <View style={styles.itemBeneficio}>
+      <Ionicons
+        name={icone}
+        size={17}
+        color={cor}
+      />
+
+      <Text
+        style={styles.textoBeneficio}
+        numberOfLines={2}
+      >
+        {titulo}
+      </Text>
+    </View>
+  );
+}
+
+// =====================================================
+// CARTÃO DE ACESSO
+// =====================================================
+
+function CartaoPerfil({
+  titulo,
+  descricao,
+  imagem,
+  cor,
+  fundo,
+  fundoImagem,
+  icone,
+  beneficios,
+  onPress,
+}: PerfilProps) {
+  const { width } = useWindowDimensions();
+  const compacto = width < 380;
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.87}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={titulo}
+      style={[
+        styles.cartao,
+        { backgroundColor: fundo },
+      ]}
+    >
+      {/* ÁREA PRINCIPAL */}
+
+      <View style={styles.cartaoPrincipal}>
+        {/* IMAGEM 3D */}
+
+        <View
+          style={[
+            styles.areaImagem,
+            {
+              backgroundColor: fundoImagem,
+              width: compacto ? 100 : 115,
+            },
+          ]}
+        >
+          <View
+            style={[
+              styles.decoracaoImagem,
+              { backgroundColor: cor },
+            ]}
+          />
+
+          <Image
+            source={imagem}
+            style={styles.imagem3D}
+            resizeMode="contain"
+          />
+        </View>
+
+        {/* TEXTO E ÍCONE */}
+
+        <View style={styles.infoPerfil}>
+          <View
+            style={[
+              styles.iconePerfil,
+              { backgroundColor: cor },
+            ]}
+          >
+            <Ionicons
+              name={icone}
+              size={19}
+              color="#FFFFFF"
+            />
+          </View>
+
+          <Text
+            style={[
+              styles.tituloCartao,
+              compacto && styles.tituloCompacto,
+            ]}
+          >
+            {titulo}
+          </Text>
+
+          <Text
+            style={styles.descricaoCartao}
+            numberOfLines={4}
+          >
+            {descricao}
+          </Text>
+        </View>
+
+        {/* SETA */}
+
+        <View
+          style={[
+            styles.seta,
+            { backgroundColor: cor },
+          ]}
+        >
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color="#FFFFFF"
+          />
+        </View>
+      </View>
+
+      {/* FAIXA DE FUNCIONALIDADES */}
+
+      <View
+        style={[
+          styles.faixaBeneficios,
+          { backgroundColor: fundoImagem },
+        ]}
+      >
+        {beneficios.map((beneficio, index) => (
+          <ItemBeneficio
+            key={`${titulo}-${index}`}
+            icone={beneficio.icone}
+            titulo={beneficio.titulo}
+            cor={cor}
+          />
+        ))}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// =====================================================
+// TELA INICIAL
+// =====================================================
 
 export default function Inicio() {
   const router = useRouter();
@@ -29,24 +242,38 @@ export default function Inicio() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* IDENTIDADE VISUAL */}
-        <View style={styles.hero}>
-          <View style={styles.decoracaoEsquerda} />
-          <View style={styles.decoracaoDireita} />
+        {/* ============================================
+            CABEÇALHO
+        ============================================ */}
 
-          <View style={styles.logoIcone}>
+        <View style={styles.header}>
+          <View style={styles.circuloDecorativo1} />
+          <View style={styles.circuloDecorativo2} />
+
+          {/* LOGOTIPO */}
+
+          <View style={styles.logoContainer}>
+            <Ionicons
+              name="heart"
+              size={65}
+              color={CORES.azul}
+            />
+
             <MaterialCommunityIcons
-              name="heart-pulse"
-              size={56}
+              name="pill"
+              size={36}
               color="#FFFFFF"
+              style={styles.logoCapsula}
             />
           </View>
 
-          <Text style={styles.logo}>
-            <Text style={styles.logoEscuro}>
+          {/* NOME DO APLICATIVO */}
+
+          <Text style={styles.logoNome}>
+            <Text style={styles.logoNomeEscuro}>
               Lembra
             </Text>
-            <Text style={styles.logoAzul}>
+            <Text style={styles.logoNomeAzul}>
               Fácil
             </Text>
           </Text>
@@ -54,197 +281,147 @@ export default function Inicio() {
           <Text style={styles.slogan}>
             Cuidando da sua rotina com carinho
           </Text>
+
+          <View style={styles.tagline}>
+            <Text style={styles.taglineTexto}>
+              Saúde • Organização • Bem-estar
+            </Text>
+          </View>
         </View>
 
-        {/* ESCOLHA DE PERFIL */}
+        {/* ============================================
+            INTRODUÇÃO
+        ============================================ */}
+
         <View style={styles.introducao}>
-          <Text style={styles.titulo}>
+          <Text style={styles.tituloPrincipal}>
             Como deseja acessar?
           </Text>
 
-          <Text style={styles.subtitulo}>
-            Escolha o seu perfil para continuar
+          <Text style={styles.subtituloPrincipal}>
+            Escolha seu perfil para continuar no LembraFácil.
           </Text>
         </View>
 
-        {/* CARTÃO DO IDOSO */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={[
-            styles.cartao,
-            styles.cartaoIdoso,
+        {/* ============================================
+            SOU IDOSO
+        ============================================ */}
+
+        <CartaoPerfil
+          titulo="Sou Idoso"
+          descricao="Medicamentos, receitas, horários e rotina diária."
+          imagem={IMAGENS.idoso}
+          cor={CORES.azul}
+          fundo="#F0F8FF"
+          fundoImagem="#DCEEFF"
+          icone="person"
+          onPress={() => router.push("/idoso")}
+          beneficios={[
+            {
+              icone: "medical-outline",
+              titulo: "Lembretes de medicação",
+            },
+            {
+              icone: "document-text-outline",
+              titulo: "Leitura de receitas",
+            },
+            {
+              icone: "calendar-outline",
+              titulo: "Rotina diária",
+            },
           ]}
-          onPress={() => router.push("/login")}
-          accessibilityRole="button"
-          accessibilityLabel="Sou Idoso, acessar login do idoso"
-        >
-          <View
-            style={[
-              styles.ilustracao,
-              styles.ilustracaoIdoso,
-            ]}
-          >
-            <Text style={styles.emoji}>
-              👴🏻
-            </Text>
-          </View>
+        />
 
-          <View style={styles.conteudoCartao}>
-            <Text style={styles.tituloCartao}>
-              Sou Idoso
-            </Text>
+        {/* ============================================
+            SOU FAMILIAR
+        ============================================ */}
 
-            <Text style={styles.descricaoCartao}>
-              Meus medicamentos, receitas,
-              horários e rotina.
-            </Text>
-          </View>
-
-          <View
-            style={[
-              styles.seta,
-              styles.setaAzul,
-            ]}
-          >
-            <Ionicons
-              name="chevron-forward"
-              size={25}
-              color="#2478E6"
-            />
-          </View>
-        </TouchableOpacity>
-
-        {/* CARTÃO DO FAMILIAR */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={[
-            styles.cartao,
-            styles.cartaoFamiliar,
+        <CartaoPerfil
+          titulo="Sou Familiar"
+          descricao="Acompanhe medicamentos, doses, rotina e alertas."
+          imagem={IMAGENS.familiar}
+          cor={CORES.verde}
+          fundo="#F0FCF4"
+          fundoImagem="#DFF8E9"
+          icone="people"
+          onPress={() => router.push("/familiar-login")}
+          beneficios={[
+            {
+              icone: "stats-chart",
+              titulo: "Status das doses",
+            },
+            {
+              icone: "people-outline",
+              titulo: "Acompanhamento",
+            },
+            {
+              icone: "notifications-outline",
+              titulo: "Alertas",
+            },
           ]}
-          onPress={() =>
-            router.push("/familia")
-          }
-          accessibilityRole="button"
-          accessibilityLabel="Sou Familiar, acessar login do familiar"
-        >
-          <View
-            style={[
-              styles.ilustracao,
-              styles.ilustracaoFamiliar,
-            ]}
-          >
-            <Text style={styles.emoji}>
-              👨‍👩‍👧
-            </Text>
-          </View>
+        />
 
-          <View style={styles.conteudoCartao}>
-            <Text style={styles.tituloCartao}>
-              Sou Familiar
-            </Text>
+        {/* ============================================
+            SOU FARMÁCIA
+        ============================================ */}
 
-            <Text style={styles.descricaoCartao}>
-              Acompanhar medicamentos, rotina,
-              status de doses e outras informações.
-            </Text>
-          </View>
-
-          <View
-            style={[
-              styles.seta,
-              styles.setaVerde,
-            ]}
-          >
-            <Ionicons
-              name="chevron-forward"
-              size={25}
-              color="#188349"
-            />
-          </View>
-        </TouchableOpacity>
-
-        {/* CARTÃO DA FARMÁCIA */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          style={[
-            styles.cartao,
-            styles.cartaoFarmacia,
+        <CartaoPerfil
+          titulo="Sou Farmácia"
+          descricao="Gerencie produtos, preços, estoque e pedidos."
+          imagem={IMAGENS.farmacia}
+          cor={CORES.roxo}
+          fundo="#F8F3FF"
+          fundoImagem="#EBE2FF"
+          icone="storefront-outline"
+          onPress={() => router.push("/farmacia-login")}
+          beneficios={[
+            {
+              icone: "cube-outline",
+              titulo: "Cadastro de produtos",
+            },
+            {
+              icone: "pricetag-outline",
+              titulo: "Preços e estoque",
+            },
+            {
+              icone: "cart-outline",
+              titulo: "Pedidos",
+            },
           ]}
-          onPress={() =>
-            router.push("/farmacia-login")
-          }
-          accessibilityRole="button"
-          accessibilityLabel="Sou Farmácia, acessar login da farmácia"
-        >
-          <View
-            style={[
-              styles.ilustracao,
-              styles.ilustracaoFarmacia,
-            ]}
-          >
-            <MaterialCommunityIcons
-              name="storefront-outline"
-              size={65}
-              color="#7C3AED"
-            />
+        />
 
-            <View style={styles.cruzFarmacia}>
-              <MaterialCommunityIcons
-                name="medical-bag"
-                size={23}
-                color="#0BAFA1"
-              />
-            </View>
-          </View>
+        {/* ============================================
+            SEGURANÇA
+        ============================================ */}
 
-          <View style={styles.conteudoCartao}>
-            <Text style={styles.tituloCartao}>
-              Sou Farmácia
-            </Text>
-
-            <Text style={styles.descricaoCartao}>
-              Gerenciar produtos, preços,
-              estoque e pedidos.
-            </Text>
-          </View>
-
-          <View
-            style={[
-              styles.seta,
-              styles.setaRoxa,
-            ]}
-          >
-            <Ionicons
-              name="chevron-forward"
-              size={25}
-              color="#6D28D9"
-            />
-          </View>
-        </TouchableOpacity>
-
-        {/* SEGURANÇA */}
         <View style={styles.seguranca}>
-          <View style={styles.escudo}>
+          <View style={styles.escudoContainer}>
             <MaterialCommunityIcons
               name="shield-check"
-              size={40}
-              color="#13864C"
+              size={38}
+              color={CORES.verde}
             />
           </View>
 
-          <View style={styles.segurancaConteudo}>
+          <View style={styles.segurancaInfo}>
             <Text style={styles.segurancaTitulo}>
               Seus dados estão seguros
             </Text>
 
             <Text style={styles.segurancaDescricao}>
-              Utilizamos autenticação segura
-              para proteger suas informações.
+              Utilizamos autenticação segura para proteger suas informações.
             </Text>
           </View>
+
+          <Ionicons
+            name="lock-closed-outline"
+            size={20}
+            color="#89B8D5"
+          />
         </View>
 
         {/* RODAPÉ */}
+
         <Text style={styles.rodape}>
           LembraFácil © 2026
         </Text>
@@ -253,236 +430,283 @@ export default function Inicio() {
   );
 }
 
+// =====================================================
+// ESTILOS
+// =====================================================
+
 const styles = StyleSheet.create({
+  // TELA
+
   container: {
     flex: 1,
-    backgroundColor: "#F7FBFF",
+    backgroundColor: CORES.fundo,
   },
 
   scrollContent: {
-    paddingHorizontal: 18,
-    paddingBottom: 26,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
 
-  hero: {
+  // CABEÇALHO
+
+  header: {
     alignItems: "center",
-    paddingTop: 38,
-    paddingBottom: 33,
-    marginHorizontal: -18,
-    backgroundColor: "#F1F8FF",
+    backgroundColor: "#E8F5FF",
+    marginHorizontal: -16,
+    paddingTop: 10,
+    paddingBottom: 13,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
     overflow: "hidden",
-    borderBottomLeftRadius: 48,
-    borderBottomRightRadius: 48,
   },
 
-  decoracaoEsquerda: {
+  circuloDecorativo1: {
     position: "absolute",
-    width: 230,
+    width: 180,
     height: 180,
-    borderRadius: 100,
-    backgroundColor: "#DDEEFF",
-    left: -125,
-    bottom: -93,
-    transform: [
-      { rotate: "-15deg" },
-    ],
-  },
-
-  decoracaoDireita: {
-    position: "absolute",
-    width: 175,
-    height: 175,
     borderRadius: 90,
-    borderWidth: 22,
-    borderColor: "#E2F0FF",
-    right: -100,
-    top: 8,
+    backgroundColor: "#CDEAFF",
+    right: -105,
+    top: -100,
   },
 
-  logoIcone: {
-    width: 91,
-    height: 91,
-    borderRadius: 32,
-    backgroundColor: "#2679ED",
+  circuloDecorativo2: {
+    position: "absolute",
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: "#D2ECFF",
+    left: -105,
+    bottom: -95,
+  },
+
+  logoContainer: {
+    width: 74,
+    height: 74,
     alignItems: "center",
     justifyContent: "center",
-    elevation: 5,
-    marginBottom: 12,
   },
 
-  logo: {
-    fontSize: 38,
+  logoCapsula: {
+    position: "absolute",
+    transform: [{ rotate: "-35deg" }],
+  },
+
+  logoNome: {
+    fontSize: 34,
     fontWeight: "900",
-    letterSpacing: -1.6,
+    letterSpacing: -1.5,
+    marginTop: -3,
   },
 
-  logoEscuro: {
-    color: "#071C5A",
+  logoNomeEscuro: {
+    color: CORES.azulEscuro,
   },
 
-  logoAzul: {
-    color: "#2679ED",
+  logoNomeAzul: {
+    color: CORES.azul,
   },
 
   slogan: {
-    fontSize: 15,
-    color: "#4C607C",
+    color: "#48627D",
+    fontSize: 13,
+    fontWeight: "600",
     textAlign: "center",
-    marginTop: 5,
-    fontWeight: "500",
+    marginTop: 1,
   },
+
+  tagline: {
+    marginTop: 7,
+    backgroundColor: "#FFFFFFCC",
+    paddingHorizontal: 13,
+    paddingVertical: 5,
+    borderRadius: 25,
+  },
+
+  taglineTexto: {
+    color: "#2774B8",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+
+  // INTRODUÇÃO
 
   introducao: {
     alignItems: "center",
-    marginTop: 30,
-    marginBottom: 24,
+    marginTop: 12,
+    marginBottom: 13,
+    paddingHorizontal: 6,
   },
 
-  titulo: {
-    fontSize: 28,
+  tituloPrincipal: {
+    color: CORES.azulEscuro,
+    fontSize: 24,
     fontWeight: "900",
-    color: "#071C5A",
     textAlign: "center",
-    letterSpacing: -0.7,
   },
 
-  subtitulo: {
-    fontSize: 16,
-    color: "#64748B",
+  subtituloPrincipal: {
+    color: CORES.texto,
+    fontSize: 12,
+    lineHeight: 17,
     textAlign: "center",
-    marginTop: 8,
+    marginTop: 3,
   },
+
+  // CARTÕES COMPACTOS
 
   cartao: {
+    borderRadius: 22,
+    padding: 10,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    elevation: 3,
+    shadowColor: "#18324B",
+    shadowOpacity: 0.1,
+    shadowRadius: 7,
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+  },
+
+  cartaoPrincipal: {
     flexDirection: "row",
     alignItems: "center",
-    minHeight: 145,
-    borderRadius: 27,
-    marginBottom: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#FFFFFF",
-    backgroundColor: "#FFFFFF",
-    elevation: 4,
+    minHeight: 130,
   },
 
-  cartaoIdoso: {
-    backgroundColor: "#F2F8FF",
+  areaImagem: {
+    height: 130,
+    borderRadius: 18,
+    marginRight: 9,
+    overflow: "hidden",
+    justifyContent: "center",
+    alignItems: "center",
   },
 
-  cartaoFamiliar: {
-    backgroundColor: "#F2FCF5",
+  decoracaoImagem: {
+    position: "absolute",
+    width: 115,
+    height: 115,
+    borderRadius: 58,
+    opacity: 0.12,
+    bottom: -50,
+    left: -25,
   },
 
-  cartaoFarmacia: {
-    backgroundColor: "#F8F3FF",
+  imagem3D: {
+    width: "100%",
+    height: "100%",
   },
 
-  ilustracao: {
-    width: 100,
-    height: 111,
-    borderRadius: 21,
+  infoPerfil: {
+    flex: 1,
+    justifyContent: "center",
+    paddingVertical: 4,
+  },
+
+  iconePerfil: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 13,
-  },
-
-  ilustracaoIdoso: {
-    backgroundColor: "#DEEDFF",
-  },
-
-  ilustracaoFamiliar: {
-    backgroundColor: "#DFF5E7",
-  },
-
-  ilustracaoFarmacia: {
-    backgroundColor: "#EAE1FF",
-  },
-
-  emoji: {
-    fontSize: 55,
-  },
-
-  cruzFarmacia: {
-    position: "absolute",
-    top: 13,
-    right: 12,
-  },
-
-  conteudoCartao: {
-    flex: 1,
+    marginBottom: 6,
   },
 
   tituloCartao: {
-    fontSize: 21,
+    fontSize: 18,
     fontWeight: "900",
-    color: "#081C59",
-    marginBottom: 7,
+    color: CORES.azulEscuro,
+    marginBottom: 4,
+  },
+
+  tituloCompacto: {
+    fontSize: 16,
   },
 
   descricaoCartao: {
-    fontSize: 13,
-    color: "#53637E",
-    lineHeight: 19,
+    color: CORES.texto,
+    fontSize: 11,
+    lineHeight: 16,
   },
 
   seta: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 6,
+    marginLeft: 4,
   },
 
-  setaAzul: {
-    backgroundColor: "#DCEEFF",
+  // FUNCIONALIDADES
+
+  faixaBeneficios: {
+    flexDirection: "row",
+    borderRadius: 15,
+    paddingVertical: 8,
+    paddingHorizontal: 5,
+    marginTop: 7,
   },
 
-  setaVerde: {
-    backgroundColor: "#DDF6E5",
+  itemBeneficio: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 3,
+    minHeight: 40,
   },
 
-  setaRoxa: {
-    backgroundColor: "#E8DFFF",
+  textoBeneficio: {
+    color: "#42536B",
+    fontSize: 9,
+    lineHeight: 12,
+    fontWeight: "700",
+    textAlign: "center",
+    marginTop: 3,
   },
+
+  // SEGURANÇA
 
   seguranca: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "center",
-    width: "94%",
-    backgroundColor: "#EAF9F1",
-    borderRadius: 25,
-    padding: 16,
-    marginTop: 14,
+    backgroundColor: "#E8F9F0",
+    borderRadius: 21,
+    padding: 12,
+    marginTop: 8,
   },
 
-  escudo: {
-    marginRight: 12,
+  escudoContainer: {
+    marginRight: 9,
   },
 
-  segurancaConteudo: {
+  segurancaInfo: {
     flex: 1,
   },
 
   segurancaTitulo: {
-    fontSize: 16,
-    fontWeight: "800",
     color: "#17623A",
+    fontSize: 15,
+    fontWeight: "900",
   },
 
   segurancaDescricao: {
-    fontSize: 12,
     color: "#426654",
-    lineHeight: 18,
+    fontSize: 11,
+    lineHeight: 16,
     marginTop: 3,
   },
 
+  // RODAPÉ
+
   rodape: {
-    textAlign: "center",
-    color: "#9AA9B9",
+    color: "#9BAABD",
     fontSize: 11,
-    marginTop: 20,
+    textAlign: "center",
+    marginTop: 16,
   },
 });
