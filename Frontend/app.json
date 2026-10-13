@@ -1,8 +1,9 @@
+
 {
   "expo": {
     "name": "Lembra-Fácil",
     "slug": "mobile",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/lembrafacil-icon.png",
     "scheme": "mobile",
@@ -11,6 +12,7 @@
       "icon": "./assets/images/lembrafacil-icon.png"
     },
     "android": {
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/lembrafacil-icon.png"
