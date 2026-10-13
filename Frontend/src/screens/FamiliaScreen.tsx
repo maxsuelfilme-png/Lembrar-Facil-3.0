@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
 
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,18 +12,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
 import { SafeAreaView } from "react-native-safe-area-context";
-
 import {
   Ionicons,
   MaterialCommunityIcons,
 } from "@expo/vector-icons";
-
-import {
-  useFocusEffect,
-  useRouter,
-} from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 
 import {
   atualizarMeuCuidador,
@@ -35,26 +29,17 @@ export default function FamiliaScreen() {
 
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
 
-  const [carregando, setCarregando] =
-    useState(true);
-
-  const [salvando, setSalvando] =
-    useState(false);
-
-  async function carregarCuidador() {
+  // BUSCAR DADOS DO FAMILIAR NO DJANGO
+  const carregarCuidador = useCallback(async () => {
     try {
-      const cuidador =
-        await buscarMeuCuidador();
-
+      const cuidador = await buscarMeuCuidador();
       setNome(cuidador.nome || "");
       setTelefone(cuidador.telefone || "");
     } catch (erro) {
-      console.error(
-        "Erro ao carregar familiar:",
-        erro
-      );
-
+      console.error("Erro ao carregar familiar:", erro);
       Alert.alert(
         "Erro",
         "Não foi possível carregar os dados do familiar."
@@ -62,58 +47,43 @@ export default function FamiliaScreen() {
     } finally {
       setCarregando(false);
     }
-  }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       carregarCuidador();
-    }, [])
+    }, [carregarCuidador])
   );
 
+  // SALVAR DADOS DO FAMILIAR
   async function salvar() {
     if (!nome.trim()) {
-      Alert.alert(
-        "Atenção",
-        "Informe o nome do familiar."
-      );
-
+      Alert.alert("Atenção", "Informe o nome do familiar.");
       return;
     }
 
     if (!telefone.trim()) {
-      Alert.alert(
-        "Atenção",
-        "Informe o telefone do familiar."
-      );
-
+      Alert.alert("Atenção", "Informe o telefone do familiar.");
       return;
     }
 
     try {
       setSalvando(true);
 
-      const atualizado =
-        await atualizarMeuCuidador(
-          nome,
-          telefone
-        );
-
-      setNome(atualizado.nome);
-
-      setTelefone(
-        atualizado.telefone || ""
+      const atualizado = await atualizarMeuCuidador(
+        nome.trim(),
+        telefone.trim()
       );
+
+      setNome(atualizado.nome || "");
+      setTelefone(atualizado.telefone || "");
 
       Alert.alert(
         "Salvo com sucesso! 💚",
         "Os dados do familiar foram atualizados."
       );
     } catch (erro) {
-      console.error(
-        "Erro ao salvar familiar:",
-        erro
-      );
-
+      console.error("Erro ao salvar familiar:", erro);
       Alert.alert(
         "Erro",
         "Não foi possível salvar os dados."
@@ -126,9 +96,7 @@ export default function FamiliaScreen() {
   if (carregando) {
     return (
       <SafeAreaView style={styles.container}>
-        <View
-          style={styles.carregandoContainer}
-        >
+        <View style={styles.carregandoContainer}>
           <View style={styles.loadingIcon}>
             <MaterialCommunityIcons
               name="account-group"
@@ -142,9 +110,7 @@ export default function FamiliaScreen() {
             color="#16A34A"
           />
 
-          <Text
-            style={styles.carregandoTexto}
-          >
+          <Text style={styles.carregandoTexto}>
             Carregando área da família...
           </Text>
         </View>
@@ -166,12 +132,11 @@ export default function FamiliaScreen() {
         }
       >
         <ScrollView
-          contentContainerStyle={
-            styles.content
-          }
+          contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {/* BARRA SUPERIOR */}
           <View style={styles.topBar}>
             <TouchableOpacity
               style={styles.backButton}
@@ -194,6 +159,7 @@ export default function FamiliaScreen() {
             </View>
           </View>
 
+          {/* CABEÇALHO */}
           <View style={styles.header}>
             <Text style={styles.title}>
               Área da família
@@ -206,6 +172,7 @@ export default function FamiliaScreen() {
             </Text>
           </View>
 
+          {/* CARTÃO PRINCIPAL */}
           <View style={styles.heroCard}>
             <View style={styles.heroIcon}>
               <MaterialCommunityIcons
@@ -224,15 +191,14 @@ export default function FamiliaScreen() {
                 Cuidando de quem você ama
               </Text>
 
-              <Text
-                style={styles.heroDescription}
-              >
+              <Text style={styles.heroDescription}>
                 Acompanhe medicamentos,
                 confirmações e alertas.
               </Text>
             </View>
           </View>
 
+          {/* CADASTRO DO FAMILIAR */}
           <Text style={styles.sectionTitle}>
             Familiar responsável
           </Text>
@@ -252,11 +218,8 @@ export default function FamiliaScreen() {
                   Dados do familiar
                 </Text>
 
-                <Text
-                  style={styles.cardSubtitle}
-                >
-                  Informe quem receberá os
-                  alertas
+                <Text style={styles.cardSubtitle}>
+                  Informe quem receberá os alertas
                 </Text>
               </View>
             </View>
@@ -310,26 +273,22 @@ export default function FamiliaScreen() {
               />
 
               <Text style={styles.infoText}>
-                Este telefone poderá ser
-                utilizado para receber os
-                alertas do LembraFácil.
+                Este telefone poderá ser utilizado
+                para receber os alertas do LembraFácil.
               </Text>
             </View>
 
             <TouchableOpacity
               style={[
                 styles.botaoSalvar,
-                salvando &&
-                  styles.botaoDesabilitado,
+                salvando && styles.botaoDesabilitado,
               ]}
               disabled={salvando}
               onPress={salvar}
               activeOpacity={0.85}
             >
               {salvando ? (
-                <ActivityIndicator
-                  color="#FFFFFF"
-                />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <>
                   <Ionicons
@@ -338,11 +297,7 @@ export default function FamiliaScreen() {
                     color="#FFFFFF"
                   />
 
-                  <Text
-                    style={
-                      styles.botaoSalvarTexto
-                    }
-                  >
+                  <Text style={styles.botaoSalvarTexto}>
                     SALVAR FAMILIAR
                   </Text>
                 </>
@@ -350,19 +305,19 @@ export default function FamiliaScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* ACOMPANHAMENTO */}
           <Text style={styles.sectionTitle}>
             Acompanhamento
           </Text>
 
+          {/* ROTINA */}
           <TouchableOpacity
             style={[
               styles.optionCard,
               styles.rotinaCard,
             ]}
             activeOpacity={0.85}
-            onPress={() =>
-              router.push("/rotina")
-            }
+            onPress={() => router.push("/rotina")}
           >
             <View
               style={[
@@ -390,9 +345,7 @@ export default function FamiliaScreen() {
                 Rotina de hoje
               </Text>
 
-              <Text
-                style={styles.optionDescription}
-              >
+              <Text style={styles.optionDescription}>
                 Veja horários e confirmações
                 dos medicamentos.
               </Text>
@@ -407,15 +360,14 @@ export default function FamiliaScreen() {
             </View>
           </TouchableOpacity>
 
+          {/* MEDICAMENTOS */}
           <TouchableOpacity
             style={[
               styles.optionCard,
               styles.medicamentoCard,
             ]}
             activeOpacity={0.85}
-            onPress={() =>
-              router.push("/medicamentos")
-            }
+            onPress={() => router.push("/medicamentos")}
           >
             <View
               style={[
@@ -435,9 +387,7 @@ export default function FamiliaScreen() {
                 Medicamentos
               </Text>
 
-              <Text
-                style={styles.optionDescription}
-              >
+              <Text style={styles.optionDescription}>
                 Consulte os medicamentos
                 cadastrados no LembraFácil.
               </Text>
@@ -452,6 +402,7 @@ export default function FamiliaScreen() {
             </View>
           </TouchableOpacity>
 
+          {/* ALERTAS */}
           <View
             style={[
               styles.optionCard,
@@ -476,16 +427,142 @@ export default function FamiliaScreen() {
                 Alertas
               </Text>
 
-              <Text
-                style={styles.optionDescription}
-              >
+              <Text style={styles.optionDescription}>
                 O familiar poderá ser avisado
-                quando houver um medicamento
-                atrasado.
+                quando houver um medicamento atrasado.
               </Text>
             </View>
           </View>
 
+          {/* NOVAS OPÇÕES DE FARMÁCIAS */}
+          <Text style={styles.sectionTitle}>
+            Farmácias e medicamentos
+          </Text>
+
+          <Text style={styles.farmaciasIntro}>
+            Encontre farmácias parceiras, consulte
+            medicamentos e preços e acompanhe
+            a reposição.
+          </Text>
+
+          {/* ENCONTRAR FARMÁCIAS */}
+          <TouchableOpacity
+            style={styles.farmaciaOpcao}
+            activeOpacity={0.85}
+            onPress={() =>
+              router.push("/farmacias-busca")
+            }
+          >
+            <View
+              style={[
+                styles.farmaciaOpcaoIcone,
+                styles.buscaFundo,
+              ]}
+            >
+              <Ionicons
+                name="search-outline"
+                size={34}
+                color="#2563EB"
+              />
+            </View>
+
+            <View style={styles.optionContent}>
+              <Text style={styles.optionTitle}>
+                Encontrar farmácias
+              </Text>
+
+              <Text style={styles.optionDescription}>
+                Pesquise medicamentos, compare preços
+                e consulte as farmácias disponíveis.
+              </Text>
+            </View>
+
+            <Ionicons
+              name="chevron-forward"
+              size={26}
+              color="#2563EB"
+            />
+          </TouchableOpacity>
+
+          {/* MAPA */}
+          <TouchableOpacity
+            style={styles.farmaciaOpcao}
+            activeOpacity={0.85}
+            onPress={() =>
+              router.push("/farmacias-mapa")
+            }
+          >
+            <View
+              style={[
+                styles.farmaciaOpcaoIcone,
+                styles.mapaFundo,
+              ]}
+            >
+              <Ionicons
+                name="map-outline"
+                size={34}
+                color="#7C3AED"
+              />
+            </View>
+
+            <View style={styles.optionContent}>
+              <Text style={styles.optionTitle}>
+                Ver farmácias no mapa
+              </Text>
+
+              <Text style={styles.optionDescription}>
+                Visualize a localização das farmácias
+                parceiras e descubra como chegar.
+              </Text>
+            </View>
+
+            <Ionicons
+              name="chevron-forward"
+              size={26}
+              color="#7C3AED"
+            />
+          </TouchableOpacity>
+
+          {/* REPOSIÇÃO */}
+          <TouchableOpacity
+            style={styles.farmaciaOpcao}
+            activeOpacity={0.85}
+            onPress={() =>
+              router.push("/farmacias-reposicao")
+            }
+          >
+            <View
+              style={[
+                styles.farmaciaOpcaoIcone,
+                styles.reposicaoFundo,
+              ]}
+            >
+              <Ionicons
+                name="notifications-outline"
+                size={34}
+                color="#D97706"
+              />
+            </View>
+
+            <View style={styles.optionContent}>
+              <Text style={styles.optionTitle}>
+                Reposição de medicamentos
+              </Text>
+
+              <Text style={styles.optionDescription}>
+                Acompanhe o estoque e as solicitações
+                de reposição dos medicamentos.
+              </Text>
+            </View>
+
+            <Ionicons
+              name="chevron-forward"
+              size={26}
+              color="#D97706"
+            />
+          </TouchableOpacity>
+
+          {/* RODAPÉ */}
           <View style={styles.footerCard}>
             <View style={styles.footerItem}>
               <Ionicons
@@ -493,7 +570,6 @@ export default function FamiliaScreen() {
                 size={21}
                 color="#16A34A"
               />
-
               <Text style={styles.footerText}>
                 Cuidado{"\n"}e segurança
               </Text>
@@ -507,7 +583,6 @@ export default function FamiliaScreen() {
                 size={21}
                 color="#16A34A"
               />
-
               <Text style={styles.footerText}>
                 Alertas{"\n"}importantes
               </Text>
@@ -521,7 +596,6 @@ export default function FamiliaScreen() {
                 size={21}
                 color="#16A34A"
               />
-
               <Text style={styles.footerText}>
                 Sempre{"\n"}por perto
               </Text>
@@ -583,15 +657,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
-
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-
     elevation: 3,
   },
 
@@ -631,18 +696,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 24,
-
     borderWidth: 1,
     borderColor: "#D7F2E1",
-
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-
     elevation: 3,
   },
 
@@ -693,18 +748,8 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 17,
     marginBottom: 25,
-
     borderWidth: 1,
     borderColor: "#E8EEF5",
-
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.06,
-    shadowRadius: 11,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-
     elevation: 3,
   },
 
@@ -791,15 +836,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 9,
-
-    shadowColor: "#16A34A",
-    shadowOpacity: 0.17,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-
     elevation: 4,
   },
 
@@ -820,17 +856,8 @@ const styles = StyleSheet.create({
     marginBottom: 13,
     flexDirection: "row",
     alignItems: "center",
-
     borderWidth: 1,
-
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-
+    borderColor: "#E8EEF5",
     elevation: 2,
   },
 
@@ -926,6 +953,48 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 7,
+  },
+
+  // ESTILOS DAS NOVAS OPÇÕES
+  farmaciasIntro: {
+    color: "#64748B",
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 15,
+  },
+
+  farmaciaOpcao: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 15,
+    marginBottom: 15,
+    minHeight: 120,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E8EEF5",
+    elevation: 3,
+  },
+
+  farmaciaOpcaoIcone: {
+    width: 74,
+    height: 78,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 14,
+  },
+
+  buscaFundo: {
+    backgroundColor: "#E3F1FF",
+  },
+
+  mapaFundo: {
+    backgroundColor: "#F0E7FF",
+  },
+
+  reposicaoFundo: {
+    backgroundColor: "#FFF2D7",
   },
 
   footerCard: {
