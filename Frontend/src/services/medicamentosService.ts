@@ -1,11 +1,12 @@
+
 import {
   API_URL,
-  pegarAccessToken,
+  obterTokenValido,
   renovarAccessToken,
 } from "./authService";
 
 // ======================================================
-// TIPO USADO PELO APLICATIVO
+// TIPOS
 // ======================================================
 
 export type Medicamento = {
@@ -17,10 +18,6 @@ export type Medicamento = {
   frequencia: string;
   duracao: string;
 };
-
-// ======================================================
-// TIPO RECEBIDO DO DJANGO
-// ======================================================
 
 type MedicamentoAPI = {
   id: number;
@@ -36,7 +33,7 @@ type MedicamentoAPI = {
 };
 
 // ======================================================
-// CONVERTER DJANGO -> APLICATIVO
+// CONVERTER API -> APP
 // ======================================================
 
 function converterDaAPI(
@@ -44,83 +41,47 @@ function converterDaAPI(
 ): Medicamento {
   return {
     id: String(item.id),
-
     medicamento: item.nome ?? "",
-
     dosagem: item.dose ?? "",
-
-    quantidade: item.quantidade ?? "",
-
-    // Django pode devolver 08:00:00.
-    // No aplicativo mostramos 08:00.
+    quantidade: String(item.quantidade ?? ""),
     horario: item.horario
       ? item.horario.substring(0, 5)
       : "",
-
     frequencia: item.frequencia ?? "",
-
     duracao: item.duracao ?? "",
   };
 }
 
 // ======================================================
-// CONVERTER APLICATIVO -> DJANGO
-// ======================================================
-
-function converterParaAPI(
-  medicamento: Omit<Medicamento, "id">
-) {
-  return {
-    nome: medicamento.medicamento.trim(),
-
-    dose: medicamento.dosagem.trim(),
-
-    quantidade:
-      medicamento.quantidade?.trim() ?? "",
-
-    horario: normalizarHorario(
-      medicamento.horario
-    ),
-
-    frequencia:
-      medicamento.frequencia?.trim() ?? "",
-
-    duracao:
-      medicamento.duracao?.trim() ?? "",
-
-    observacao: "",
-
-    ativo: true,
-  };
-}
-
-// ======================================================
 // NORMALIZAR HORÁRIO
-// Aceita: 8, 8h, 8h30, 8:00, 8.30, 0800, 08:00:00
-// Devolve sempre HH:MM:00 ou lança erro se for inválido
 // ======================================================
 
-function normalizarHorario(
-  horario: string
-): string {
+function normalizarHorario(horario: string): string {
   const valor = horario
     .trim()
     .toLowerCase()
     .replace(/\s+/g, "");
 
-  const m =
-    valor.match(/^(\d{1,2})[:h.](\d{1,2})?(?:min)?(?::\d{2})?$/) || // 8:00, 8h30, 8h, 8.30, 08:00:00
-    valor.match(/^(\d{1,2})()$/) ||                                  // 8
-    valor.match(/^(\d{2})(\d{2})$/);                                 // 0800
+  let horas: number;
+  let minutos = 0;
 
-  if (!m) {
+  const comSeparador = valor.match(
+    /^(\d{1,2})(?:[:h.](\d{1,2})?)?(?::\d{2})?$/
+  );
+
+  const compacto = valor.match(/^(\d{2})(\d{2})$/);
+
+  if (comSeparador) {
+    horas = Number(comSeparador[1]);
+    minutos = Number(comSeparador[2] || 0);
+  } else if (compacto) {
+    horas = Number(compacto[1]);
+    minutos = Number(compacto[2]);
+  } else {
     throw new Error(
       "Horário inválido. Use o formato 08:00."
     );
   }
-
-  const horas = Number(m[1]);
-  const minutos = m[2] ? Number(m[2]) : 0;
 
   if (horas > 23 || minutos > 59) {
     throw new Error(
@@ -128,56 +89,127 @@ function normalizarHorario(
     );
   }
 
-  const hh = String(horas).padStart(2, "0");
-  const mm = String(minutos).padStart(2, "0");
-
-  return `${hh}:${mm}:00`;
+  return (
+    String(horas).padStart(2, "0") +
+    ":" +
+    String(minutos).padStart(2, "0") +
+    ":00"
+  );
 }
 
 // ======================================================
-// FETCH AUTENTICADO
+// CONVERTER APP -> API
+// ======================================================
+
+function converterParaAPI(
+  medicamento: Omit<Medicamento, "id">
+) {
+  if (!medicamento.medicamento.trim()) {
+    throw new Error("Informe o medicamento.");
+  }
+
+  if (!medicamento.dosagem.trim()) {
+    throw new Error("Informe a dosagem.");
+  }
+
+  return {
+    nome: medicamento.medicamento.trim(),
+    dose: medicamento.dosagem.trim(),
+    quantidade: String(
+      medicamento.quantidade ?? ""
+    ).trim(),
+    horario: normalizarHorario(medicamento.horario),
+    frequencia: String(
+      medicamento.frequencia ?? ""
+    ).trim(),
+    duracao: String(
+      medicamento.duracao ?? ""
+    ).trim(),
+    observacao: "",
+    ativo: true,
+  };
+}
+
+// ======================================================
+// MENSAGEM REAL DO BACKEND
+// ======================================================
+
+async function obterMensagemErro(
+  response: Response
+): Promise<string> {
+  const texto = await response.text();
+
+  if (!texto) {
+    return `Erro HTTP ${response.status}`;
+  }
+
+  try {
+    const dados = JSON.parse(texto);
+
+    if (typeof dados.detail === "string") {
+      return dados.detail;
+    }
+
+    if (typeof dados.message === "string") {
+      return dados.message;
+    }
+
+    if (typeof dados === "object" && dados !== null) {
+      return Object.entries(dados)
+        .map(([campo, valor]) => {
+          const mensagem = Array.isArray(valor)
+            ? valor.join(", ")
+            : String(valor);
+
+          return `${campo}: ${mensagem}`;
+        })
+        .join("\n");
+    }
+  } catch {
+    // Resposta não está em JSON.
+  }
+
+  return texto.substring(0, 300);
+}
+
+// ======================================================
+// REQUISIÇÃO AUTENTICADA
 // ======================================================
 
 async function fetchAutenticado(
   url: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  let token = await pegarAccessToken();
+  let token = await obterTokenValido();
 
   if (!token) {
     throw new Error(
-      "Usuário não autenticado."
+      "É necessário autenticar o paciente para salvar medicamentos no servidor."
     );
   }
 
-  let response = await fetch(url, {
-    ...options,
+  const enviar = (accessToken: string) =>
+    fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
 
-    headers: {
-      "Content-Type": "application/json",
+  let response = await enviar(token);
 
-      Authorization: `Bearer ${token}`,
-
-      ...(options.headers || {}),
-    },
-  });
-
-  // Access token expirou.
-  // Tenta renovar automaticamente.
   if (response.status === 401) {
     token = await renovarAccessToken();
 
-    response = await fetch(url, {
-      ...options,
+    if (!token) {
+      throw new Error(
+        "Sessão expirada. É necessário autenticar novamente."
+      );
+    }
 
-      headers: {
-        "Content-Type": "application/json",
-
-        Authorization: `Bearer ${token}`,
-
-        ...(options.headers || {}),
-      },
-    });
+    response = await enviar(token);
   }
 
   return response;
@@ -190,30 +222,27 @@ async function fetchAutenticado(
 export async function adicionarMedicamento(
   medicamento: Omit<Medicamento, "id">
 ): Promise<Medicamento> {
-  const dados = converterParaAPI(
-    medicamento
-  );
+  const dados = converterParaAPI(medicamento);
 
   const response = await fetchAutenticado(
-    `${API_URL}/medicamentos/`,
+    `${API_URL.replace(/\/$/, "")}/medicamentos/`,
     {
       method: "POST",
-
       body: JSON.stringify(dados),
     }
   );
 
   if (!response.ok) {
-    const erro = await response.text();
+    const mensagem = await obterMensagemErro(response);
 
     console.error(
       "Erro ao cadastrar medicamento:",
       response.status,
-      erro
+      mensagem
     );
 
     throw new Error(
-      "Não foi possível cadastrar o medicamento."
+      `Não foi possível cadastrar (${response.status}): ${mensagem}`
     );
   }
 
@@ -231,43 +260,24 @@ export async function listarMedicamentos(): Promise<
   Medicamento[]
 > {
   const response = await fetchAutenticado(
-    `${API_URL}/medicamentos/`
+    `${API_URL.replace(/\/$/, "")}/medicamentos/`
   );
 
   if (!response.ok) {
-    const erro = await response.text();
-
-    console.error(
-      "Erro ao listar medicamentos:",
-      response.status,
-      erro
-    );
-
     throw new Error(
-      "Não foi possível carregar os medicamentos."
+      await obterMensagemErro(response)
     );
   }
 
   const resultado = await response.json();
 
-  // Caso a paginação do DRF esteja habilitada
-  if (
-    resultado &&
-    Array.isArray(resultado.results)
-  ) {
-    return resultado.results.map(
-      converterDaAPI
-    );
-  }
+  const lista = Array.isArray(resultado)
+    ? resultado
+    : Array.isArray(resultado?.results)
+      ? resultado.results
+      : [];
 
-  // Caso o DRF devolva uma lista normal
-  if (Array.isArray(resultado)) {
-    return resultado.map(
-      converterDaAPI
-    );
-  }
-
-  return [];
+  return lista.map(converterDaAPI);
 }
 
 // ======================================================
@@ -278,7 +288,7 @@ export async function buscarMedicamento(
   id: string
 ): Promise<Medicamento | null> {
   const response = await fetchAutenticado(
-    `${API_URL}/medicamentos/${id}/`
+    `${API_URL.replace(/\/$/, "")}/medicamentos/${id}/`
   );
 
   if (response.status === 404) {
@@ -286,23 +296,12 @@ export async function buscarMedicamento(
   }
 
   if (!response.ok) {
-    const erro = await response.text();
-
-    console.error(
-      "Erro ao buscar medicamento:",
-      response.status,
-      erro
-    );
-
     throw new Error(
-      "Não foi possível buscar o medicamento."
+      await obterMensagemErro(response)
     );
   }
 
-  const resultado: MedicamentoAPI =
-    await response.json();
-
-  return converterDaAPI(resultado);
+  return converterDaAPI(await response.json());
 }
 
 // ======================================================
@@ -311,20 +310,14 @@ export async function buscarMedicamento(
 
 export async function atualizarMedicamento(
   id: string,
-  dadosAtualizados: Omit<
-    Medicamento,
-    "id"
-  >
+  dadosAtualizados: Omit<Medicamento, "id">
 ): Promise<Medicamento | null> {
-  const dados = converterParaAPI(
-    dadosAtualizados
-  );
+  const dados = converterParaAPI(dadosAtualizados);
 
   const response = await fetchAutenticado(
-    `${API_URL}/medicamentos/${id}/`,
+    `${API_URL.replace(/\/$/, "")}/medicamentos/${id}/`,
     {
       method: "PATCH",
-
       body: JSON.stringify(dados),
     }
   );
@@ -334,23 +327,12 @@ export async function atualizarMedicamento(
   }
 
   if (!response.ok) {
-    const erro = await response.text();
-
-    console.error(
-      "Erro ao atualizar medicamento:",
-      response.status,
-      erro
-    );
-
     throw new Error(
-      "Não foi possível atualizar o medicamento."
+      await obterMensagemErro(response)
     );
   }
 
-  const resultado: MedicamentoAPI =
-    await response.json();
-
-  return converterDaAPI(resultado);
+  return converterDaAPI(await response.json());
 }
 
 // ======================================================
@@ -361,7 +343,7 @@ export async function excluirMedicamento(
   id: string
 ): Promise<boolean> {
   const response = await fetchAutenticado(
-    `${API_URL}/medicamentos/${id}/`,
+    `${API_URL.replace(/\/$/, "")}/medicamentos/${id}/`,
     {
       method: "DELETE",
     }
@@ -372,16 +354,8 @@ export async function excluirMedicamento(
   }
 
   if (!response.ok) {
-    const erro = await response.text();
-
-    console.error(
-      "Erro ao excluir medicamento:",
-      response.status,
-      erro
-    );
-
     throw new Error(
-      "Não foi possível excluir o medicamento."
+      await obterMensagemErro(response)
     );
   }
 
