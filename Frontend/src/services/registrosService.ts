@@ -1,136 +1,151 @@
+
 import {
-    API_URL,
-    pegarAccessToken,
-    renovarAccessToken,
+  API_URL,
+  pegarAccessToken,
+  renovarAccessToken,
+  obterTokenValidoIdoso,
 } from "./authService";
-
-
-// ======================================================
-// TIPOS
-// ======================================================
 
 export type StatusRegistro =
   | "pendente"
   | "tomado"
   | "atrasado";
 
-
 export type RegistroMedicamento = {
   id: number;
-
   medicamento: number;
-
   medicamento_nome: string;
-
   medicamento_dose: string;
-
   data: string;
-
   horario_previsto: string;
-
   status: StatusRegistro;
-
   confirmado_em: string | null;
-
   criado_em: string;
-
   atualizado_em: string;
 };
 
+export type OpcoesRegistros = {
+  perfil: "idoso" | "familiar";
+};
 
-// ======================================================
-// FETCH AUTENTICADO
-// ======================================================
+function enderecoAPI(caminho: string): string {
+  return `${API_URL.replace(/\/+$/, "")}/${caminho.replace(/^\/+/, "")}`;
+}
 
-async function fetchAutenticado(
-  url: string,
-  options: RequestInit = {}
-): Promise<Response> {
+async function obterToken(
+  perfil: "idoso" | "familiar"
+): Promise<string> {
+  if (perfil === "idoso") {
+    const token = await obterTokenValidoIdoso();
+
+    if (!token) {
+      throw new Error(
+        "Sessão do idoso não encontrada. Volte à tela inicial do idoso."
+      );
+    }
+
+    return token;
+  }
 
   let token = await pegarAccessToken();
 
   if (!token) {
+    token = await renovarAccessToken();
+  }
+
+  if (!token) {
     throw new Error(
-      "Usuário não autenticado."
+      "Familiar não autenticado. Faça login novamente."
     );
   }
 
-  let response = await fetch(url, {
-    ...options,
+  return token;
+}
 
-    headers: {
-      "Content-Type": "application/json",
+async function fetchAutenticado(
+  url: string,
+  options: RequestInit = {},
+  opcoes: OpcoesRegistros = { perfil: "idoso" }
+): Promise<Response> {
+  let token = await obterToken(opcoes.perfil);
 
-      Authorization: `Bearer ${token}`,
-
-      ...(options.headers || {}),
-    },
-  });
-
-
-  // ====================================================
-  // TOKEN EXPIROU
-  // ====================================================
-
-  if (response.status === 401) {
-
-    token = await renovarAccessToken();
-
-    response = await fetch(url, {
+  const executar = (accessToken: string) =>
+    fetch(url, {
       ...options,
-
       headers: {
         "Content-Type": "application/json",
-
-        Authorization: `Bearer ${token}`,
-
         ...(options.headers || {}),
+        Authorization: `Bearer ${accessToken}`,
       },
     });
+
+  let response = await executar(token);
+
+  if (response.status === 401) {
+    if (opcoes.perfil === "idoso") {
+      const tokenAtualizado =
+        await obterTokenValidoIdoso();
+
+      if (
+        tokenAtualizado &&
+        tokenAtualizado !== token
+      ) {
+        response = await executar(tokenAtualizado);
+      }
+    } else {
+      const tokenAtualizado =
+        await renovarAccessToken();
+
+      if (tokenAtualizado) {
+        response = await executar(tokenAtualizado);
+      }
+    }
+  }
+
+  if (response.status === 401) {
+    throw new Error(
+      "Sessão expirada ou acesso não autorizado."
+    );
   }
 
   return response;
 }
 
-
-// ======================================================
-// NORMALIZAR HORÁRIO
-// ======================================================
-
-function normalizarHorario(
-  horario: string
-): string {
-
+function normalizarHorario(horario: string): string {
   const valor = horario.trim();
 
-  // Exemplo: 08:00:00
-  if (
-    /^\d{2}:\d{2}:\d{2}$/.test(valor)
-  ) {
-    return valor;
+  const resultado =
+    /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(valor);
+
+  if (!resultado) {
+    throw new Error(
+      "Horário inválido. Use o formato 08:00."
+    );
   }
 
-  // Exemplo: 08:00
+  const hora = Number(resultado[1]);
+  const minuto = Number(resultado[2]);
+  const segundo = Number(resultado[3] || "0");
+
   if (
-    /^\d{2}:\d{2}$/.test(valor)
+    hora > 23 ||
+    minuto > 59 ||
+    segundo > 59
   ) {
-    return `${valor}:00`;
+    throw new Error("Horário inválido.");
   }
 
-  return valor;
+  return [
+    String(hora).padStart(2, "0"),
+    String(minuto).padStart(2, "0"),
+    String(segundo).padStart(2, "0"),
+  ].join(":");
 }
 
-
-// ======================================================
-// DATA LOCAL
-// ======================================================
-
 function obterDataLocal(): string {
-
   const agora = new Date();
 
   const ano = agora.getFullYear();
-
   const mes = String(
     agora.getMonth() + 1
   ).padStart(2, "0");
@@ -142,21 +157,16 @@ function obterDataLocal(): string {
   return `${ano}-${mes}-${dia}`;
 }
 
-
-// ======================================================
-// LISTAR REGISTROS
-// ======================================================
-
-export async function listarRegistros():
-Promise<RegistroMedicamento[]> {
-
-  const response =
-    await fetchAutenticado(
-      `${API_URL}/registros/`
-    );
+export async function listarRegistros(
+  opcoes: OpcoesRegistros = { perfil: "idoso" }
+): Promise<RegistroMedicamento[]> {
+  const response = await fetchAutenticado(
+    enderecoAPI("registros/"),
+    {},
+    opcoes
+  );
 
   if (!response.ok) {
-
     const erro = await response.text();
 
     console.error(
@@ -170,11 +180,12 @@ Promise<RegistroMedicamento[]> {
     );
   }
 
-  const resultado =
-    await response.json();
+  const resultado = await response.json();
 
+  if (Array.isArray(resultado)) {
+    return resultado;
+  }
 
-  // Caso exista paginação no DRF
   if (
     resultado &&
     Array.isArray(resultado.results)
@@ -182,56 +193,40 @@ Promise<RegistroMedicamento[]> {
     return resultado.results;
   }
 
-
-  // Lista normal
-  if (Array.isArray(resultado)) {
-    return resultado;
-  }
-
   return [];
 }
 
-
-// ======================================================
-// CRIAR REGISTRO PENDENTE
-// ======================================================
-
 export async function criarRegistro(
-  medicamentoId: string,
-  horario: string
+  medicamentoId: string | number,
+  horario: string,
+  opcoes: OpcoesRegistros = { perfil: "idoso" }
 ): Promise<RegistroMedicamento> {
+  const id = Number(medicamentoId);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error(
+      "ID do medicamento inválido."
+    );
+  }
 
   const dados = {
-
-    medicamento:
-      Number(medicamentoId),
-
-    data:
-      obterDataLocal(),
-
-    horario_previsto:
-      normalizarHorario(horario),
-
-    status:
-      "pendente" as StatusRegistro,
+    medicamento: id,
+    data: obterDataLocal(),
+    horario_previsto: normalizarHorario(horario),
+    status: "pendente" as StatusRegistro,
   };
 
-
-  const response =
-    await fetchAutenticado(
-      `${API_URL}/registros/`,
-      {
-        method: "POST",
-
-        body: JSON.stringify(dados),
-      }
-    );
-
+  const response = await fetchAutenticado(
+    enderecoAPI("registros/"),
+    {
+      method: "POST",
+      body: JSON.stringify(dados),
+    },
+    opcoes
+  );
 
   if (!response.ok) {
-
-    const erro =
-      await response.text();
+    const erro = await response.text();
 
     console.error(
       "Erro ao criar registro:",
@@ -244,36 +239,26 @@ export async function criarRegistro(
     );
   }
 
-
-  return await response.json();
+  return response.json();
 }
 
-
-// ======================================================
-// CONFIRMAR COMO TOMADO
-// ======================================================
-
 export async function confirmarRegistro(
-  registroId: number
+  registroId: number,
+  opcoes: OpcoesRegistros = { perfil: "idoso" }
 ): Promise<RegistroMedicamento> {
-
-  const response =
-    await fetchAutenticado(
-      `${API_URL}/registros/${registroId}/`,
-      {
-        method: "PATCH",
-
-        body: JSON.stringify({
-          status: "tomado",
-        }),
-      }
-    );
-
+  const response = await fetchAutenticado(
+    enderecoAPI(`registros/${registroId}/`),
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: "tomado",
+      }),
+    },
+    opcoes
+  );
 
   if (!response.ok) {
-
-    const erro =
-      await response.text();
+    const erro = await response.text();
 
     console.error(
       "Erro ao confirmar medicamento:",
@@ -286,36 +271,26 @@ export async function confirmarRegistro(
     );
   }
 
-
-  return await response.json();
+  return response.json();
 }
 
-
-// ======================================================
-// MARCAR COMO ATRASADO
-// ======================================================
-
 export async function marcarComoAtrasado(
-  registroId: number
+  registroId: number,
+  opcoes: OpcoesRegistros = { perfil: "idoso" }
 ): Promise<RegistroMedicamento> {
-
-  const response =
-    await fetchAutenticado(
-      `${API_URL}/registros/${registroId}/`,
-      {
-        method: "PATCH",
-
-        body: JSON.stringify({
-          status: "atrasado",
-        }),
-      }
-    );
-
+  const response = await fetchAutenticado(
+    enderecoAPI(`registros/${registroId}/`),
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: "atrasado",
+      }),
+    },
+    opcoes
+  );
 
   if (!response.ok) {
-
-    const erro =
-      await response.text();
+    const erro = await response.text();
 
     console.error(
       "Erro ao marcar como atrasado:",
@@ -328,6 +303,5 @@ export async function marcarComoAtrasado(
     );
   }
 
-
-  return await response.json();
+  return response.json();
 }

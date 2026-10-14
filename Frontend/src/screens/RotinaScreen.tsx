@@ -1,3 +1,4 @@
+
 import { useCallback, useState } from "react";
 
 import {
@@ -11,21 +12,33 @@ import {
   View,
 } from "react-native";
 
-import { useFocusEffect, useRouter } from "expo-router";
+import {
+  useFocusEffect,
+  useRouter,
+} from "expo-router";
+
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+
+import {
+  Ionicons,
+  MaterialCommunityIcons,
+} from "@expo/vector-icons";
 
 import {
   listarMedicamentos,
-  Medicamento,
+  type Medicamento,
 } from "../services/medicamentosService";
 
 import {
   listarRegistros,
   criarRegistro,
   confirmarRegistro,
-  RegistroMedicamento,
+  type RegistroMedicamento,
 } from "../services/registrosService";
+
+// ======================================================
+// TIPOS
+// ======================================================
 
 type StatusRotina = "tomado" | "atrasado" | "pendente";
 
@@ -35,36 +48,119 @@ type ItemRotina = {
   status: StatusRotina;
 };
 
+// ======================================================
+// DATA LOCAL
+// ======================================================
+
+function obterDataLocal(data: Date): string {
+  const ano = data.getFullYear();
+
+  const mes = String(
+    data.getMonth() + 1
+  ).padStart(2, "0");
+
+  const dia = String(
+    data.getDate()
+  ).padStart(2, "0");
+
+  return `${ano}-${mes}-${dia}`;
+}
+
+// ======================================================
+// HORÁRIO
+// ======================================================
+
+function obterHorario(
+  horario: string
+): { hora: number; minuto: number } | null {
+  const resultado =
+    /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(
+      horario.trim()
+    );
+
+  if (!resultado) {
+    return null;
+  }
+
+  const hora = Number(resultado[1]);
+  const minuto = Number(resultado[2]);
+
+  if (
+    !Number.isInteger(hora) ||
+    !Number.isInteger(minuto) ||
+    hora < 0 ||
+    hora > 23 ||
+    minuto < 0 ||
+    minuto > 59
+  ) {
+    return null;
+  }
+
+  return { hora, minuto };
+}
+
+// ======================================================
+// TELA PRINCIPAL
+// ======================================================
+
 export default function RotinaScreen() {
   const router = useRouter();
 
   const [itens, setItens] = useState<ItemRotina[]>([]);
-  const [carregando, setCarregando] = useState(true);
-  const [atualizando, setAtualizando] = useState(false);
-  const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
 
-  const hoje = new Date().toLocaleDateString("pt-BR", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-  });
+  const [carregando, setCarregando] =
+    useState(true);
+
+  const [atualizando, setAtualizando] =
+    useState(false);
+
+  const [confirmandoId, setConfirmandoId] =
+    useState<string | null>(null);
+
+  const hoje = new Date().toLocaleDateString(
+    "pt-BR",
+    {
+      weekday: "long",
+      day: "2-digit",
+      month: "long",
+    }
+  );
+
+  // ====================================================
+  // CARREGAR ROTINA DO IDOSO
+  // ====================================================
 
   const carregarRotina = useCallback(async () => {
     try {
-      const [medicamentos, registros] = await Promise.all([
-        listarMedicamentos(),
-        listarRegistros(),
-      ]);
+      const [medicamentos, registros] =
+        await Promise.all([
+          listarMedicamentos({
+            perfil: "idoso",
+          }),
+
+          listarRegistros({
+            perfil: "idoso",
+          }),
+        ]);
 
       const agora = new Date();
 
-      const dataHoje = agora.toISOString().split("T")[0];
+      const dataHoje = obterDataLocal(agora);
 
       const rotina: ItemRotina[] = medicamentos
-        .filter((medicamento) => medicamento.ativo !== false)
+        .filter((medicamento) => {
+          const item = medicamento as Medicamento & {
+            ativo?: boolean;
+          };
+
+          return item.ativo !== false;
+        })
         .map((medicamento) => {
           const registro = registros.find((item) => {
-            if (String(item.medicamento) !== String(medicamento.id)) {
+            if (
+              String(item.medicamento) !==
+              String(medicamento.id)
+            ) {
               return false;
             }
 
@@ -77,22 +173,20 @@ export default function RotinaScreen() {
 
           let status: StatusRotina = "pendente";
 
-          if (registro?.tomado) {
+          if (registro?.status === "tomado") {
             status = "tomado";
           } else {
-            const horario = medicamento.horario;
+            const horario = obterHorario(
+              medicamento.horario || ""
+            );
 
             if (horario) {
-              const [hora, minuto] = horario
-                .substring(0, 5)
-                .split(":")
-                .map(Number);
-
-              const horarioMedicamento = new Date();
+              const horarioMedicamento =
+                new Date(agora);
 
               horarioMedicamento.setHours(
-                hora,
-                minuto,
+                horario.hora,
+                horario.minuto,
                 0,
                 0
               );
@@ -109,19 +203,26 @@ export default function RotinaScreen() {
             status,
           };
         })
-        .sort((a, b) =>
-          (a.medicamento.horario || "").localeCompare(
+        .sort((a, b) => {
+          return (
+            a.medicamento.horario || ""
+          ).localeCompare(
             b.medicamento.horario || ""
-          )
-        );
+          );
+        });
 
       setItens(rotina);
     } catch (erro) {
-      console.error("Erro ao carregar rotina:", erro);
+      console.error(
+        "Erro ao carregar rotina:",
+        erro
+      );
 
       Alert.alert(
         "Erro",
-        "Não foi possível carregar sua rotina."
+        erro instanceof Error
+          ? erro.message
+          : "Não foi possível carregar sua rotina."
       );
     } finally {
       setCarregando(false);
@@ -129,19 +230,36 @@ export default function RotinaScreen() {
     }
   }, []);
 
+  // ====================================================
+  // ATUALIZAR AO ABRIR A TELA
+  // ====================================================
+
   useFocusEffect(
     useCallback(() => {
-      carregarRotina();
+      void carregarRotina();
     }, [carregarRotina])
   );
 
+  // ====================================================
+  // ATUALIZAÇÃO MANUAL
+  // ====================================================
+
   async function atualizar() {
     setAtualizando(true);
+
     await carregarRotina();
   }
 
+  // ====================================================
+  // CONFIRMAR MEDICAMENTO TOMADO
+  // ====================================================
+
   async function confirmarTomado(item: ItemRotina) {
     const id = String(item.medicamento.id);
+
+    if (confirmandoId !== null) {
+      return;
+    }
 
     try {
       setConfirmandoId(id);
@@ -150,12 +268,21 @@ export default function RotinaScreen() {
 
       if (!registro) {
         registro = await criarRegistro(
-          Number(item.medicamento.id)
+          item.medicamento.id,
+          item.medicamento.horario,
+          {
+            perfil: "idoso",
+          }
         );
       }
 
-      if (!registro.tomado) {
-        await confirmarRegistro(registro.id);
+      if (registro.status !== "tomado") {
+        await confirmarRegistro(
+          registro.id,
+          {
+            perfil: "idoso",
+          }
+        );
       }
 
       await carregarRotina();
@@ -172,12 +299,18 @@ export default function RotinaScreen() {
 
       Alert.alert(
         "Erro",
-        "Não foi possível confirmar o medicamento."
+        erro instanceof Error
+          ? erro.message
+          : "Não foi possível confirmar o medicamento."
       );
     } finally {
       setConfirmandoId(null);
     }
   }
+
+  // ====================================================
+  // CORES E STATUS
+  // ====================================================
 
   function getStatus(item: ItemRotina) {
     if (item.status === "tomado") {
@@ -206,6 +339,10 @@ export default function RotinaScreen() {
     };
   }
 
+  // ====================================================
+  // INTERFACE
+  // ====================================================
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -215,9 +352,12 @@ export default function RotinaScreen() {
           <RefreshControl
             refreshing={atualizando}
             onRefresh={atualizar}
+            colors={["#2563EB"]}
           />
         }
       >
+        {/* BARRA SUPERIOR */}
+
         <View style={styles.topBar}>
           <TouchableOpacity
             style={styles.voltarButton}
@@ -243,6 +383,8 @@ export default function RotinaScreen() {
           </View>
         </View>
 
+        {/* CABEÇALHO */}
+
         <View style={styles.header}>
           <Text style={styles.title}>
             Minha rotina
@@ -257,6 +399,8 @@ export default function RotinaScreen() {
           </Text>
         </View>
 
+        {/* CARREGANDO */}
+
         {carregando ? (
           <View style={styles.loading}>
             <ActivityIndicator
@@ -269,6 +413,8 @@ export default function RotinaScreen() {
             </Text>
           </View>
         ) : itens.length === 0 ? (
+          // NENHUM MEDICAMENTO
+
           <View style={styles.emptyCard}>
             <View style={styles.emptyIcon}>
               <MaterialCommunityIcons
@@ -305,6 +451,8 @@ export default function RotinaScreen() {
             </TouchableOpacity>
           </View>
         ) : (
+          // LISTA DE MEDICAMENTOS
+
           itens.map((item) => {
             const status = getStatus(item);
 
@@ -320,6 +468,8 @@ export default function RotinaScreen() {
                 key={String(medicamento.id)}
                 style={styles.card}
               >
+                {/* INFORMAÇÕES DO MEDICAMENTO */}
+
                 <View style={styles.cardTop}>
                   <View style={styles.medicineIcon}>
                     <MaterialCommunityIcons
@@ -330,7 +480,9 @@ export default function RotinaScreen() {
                   </View>
 
                   <View style={styles.medicineInfo}>
-                    <Text style={styles.medicineName}>
+                    <Text
+                      style={styles.medicineName}
+                    >
                       {medicamento.medicamento}
                     </Text>
 
@@ -340,6 +492,8 @@ export default function RotinaScreen() {
                       </Text>
                     )}
                   </View>
+
+                  {/* STATUS */}
 
                   <View
                     style={[
@@ -369,6 +523,8 @@ export default function RotinaScreen() {
                   </View>
                 </View>
 
+                {/* HORÁRIO */}
+
                 <View style={styles.horarioArea}>
                   <Ionicons
                     name="time-outline"
@@ -377,7 +533,9 @@ export default function RotinaScreen() {
                   />
 
                   <View>
-                    <Text style={styles.horarioLabel}>
+                    <Text
+                      style={styles.horarioLabel}
+                    >
                       Horário
                     </Text>
 
@@ -392,11 +550,42 @@ export default function RotinaScreen() {
                   </View>
                 </View>
 
+                {/* DETALHES */}
+
+                {!!medicamento.quantidade && (
+                  <Text style={styles.detalhe}>
+                    Quantidade:{" "}
+                    {medicamento.quantidade}
+                  </Text>
+                )}
+
+                {!!medicamento.frequencia && (
+                  <Text style={styles.detalhe}>
+                    Frequência:{" "}
+                    {medicamento.frequencia}
+                  </Text>
+                )}
+
+                {!!medicamento.duracao && (
+                  <Text style={styles.detalhe}>
+                    Duração:{" "}
+                    {medicamento.duracao}
+                  </Text>
+                )}
+
+                {/* CONFIRMAÇÃO */}
+
                 {item.status !== "tomado" ? (
                   <TouchableOpacity
-                    style={styles.tomeiButton}
+                    style={[
+                      styles.tomeiButton,
+                      confirmando &&
+                        styles.disabledButton,
+                    ]}
                     activeOpacity={0.85}
-                    disabled={confirmando}
+                    disabled={
+                      confirmandoId !== null
+                    }
                     onPress={() =>
                       confirmarTomado(item)
                     }
@@ -413,7 +602,9 @@ export default function RotinaScreen() {
                           color="#FFFFFF"
                         />
 
-                        <Text style={styles.tomeiText}>
+                        <Text
+                          style={styles.tomeiText}
+                        >
                           TOMEI O MEDICAMENTO
                         </Text>
                       </>
@@ -427,7 +618,9 @@ export default function RotinaScreen() {
                       color="#16A34A"
                     />
 
-                    <Text style={styles.confirmadoText}>
+                    <Text
+                      style={styles.confirmadoText}
+                    >
                       Medicamento confirmado
                     </Text>
                   </View>
@@ -436,6 +629,8 @@ export default function RotinaScreen() {
             );
           })
         )}
+
+        {/* RODAPÉ */}
 
         <View style={styles.footer}>
           <Ionicons
@@ -452,6 +647,10 @@ export default function RotinaScreen() {
     </SafeAreaView>
   );
 }
+
+// ======================================================
+// ESTILOS
+// ======================================================
 
 const styles = StyleSheet.create({
   container: {
@@ -652,6 +851,12 @@ const styles = StyleSheet.create({
     color: "#0F2557",
   },
 
+  detalhe: {
+    fontSize: 14,
+    color: "#64748B",
+    marginTop: 10,
+  },
+
   tomeiButton: {
     backgroundColor: "#16A34A",
     borderRadius: 17,
@@ -661,6 +866,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+  },
+
+  disabledButton: {
+    opacity: 0.6,
   },
 
   tomeiText: {

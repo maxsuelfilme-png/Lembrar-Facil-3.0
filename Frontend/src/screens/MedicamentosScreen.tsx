@@ -28,6 +28,10 @@ import {
   type OpcoesMedicamentos,
 } from "../services/medicamentosService";
 
+import {
+  sincronizarLembretes,
+} from "../services/lembretesService";
+
 export default function MedicamentosScreen() {
   const router = useRouter();
 
@@ -60,16 +64,14 @@ export default function MedicamentosScreen() {
     return null;
   }, [params.perfil, params.pacienteId]);
 
-  const [medicamentos, setMedicamentos] = useState<
-    Medicamento[]
-  >([]);
+  const [medicamentos, setMedicamentos] =
+    useState<Medicamento[]>([]);
 
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
 
-  const [editandoId, setEditandoId] = useState<
-    string | null
-  >(null);
+  const [editandoId, setEditandoId] =
+    useState<string | null>(null);
 
   const [nome, setNome] = useState("");
   const [dosagem, setDosagem] = useState("");
@@ -95,6 +97,17 @@ export default function MedicamentosScreen() {
 
       const dados = await listarMedicamentos(opcoes);
       setMedicamentos(dados);
+
+      if (opcoes.perfil === "idoso") {
+        try {
+          await sincronizarLembretes(dados);
+        } catch (erro) {
+          console.warn(
+            "Não foi possível sincronizar os lembretes:",
+            erro
+          );
+        }
+      }
     } catch (erro) {
       const mensagem =
         erro instanceof Error
@@ -300,9 +313,7 @@ export default function MedicamentosScreen() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
-      <TouchableOpacity
-        onPress={() => router.back()}
-      >
+      <TouchableOpacity onPress={() => router.back()}>
         <Text style={styles.voltar}>
           ← Voltar
         </Text>
@@ -434,7 +445,9 @@ export default function MedicamentosScreen() {
 
         <TouchableOpacity
           style={styles.atualizarButton}
-          onPress={carregarMedicamentos}
+          onPress={() => {
+            void carregarMedicamentos();
+          }}
           disabled={carregando}
         >
           <Text style={styles.atualizarText}>
@@ -532,39 +545,46 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F7F8FA",
   },
+
   content: {
     padding: 22,
     paddingBottom: 40,
   },
+
   voltar: {
     fontSize: 18,
     color: "#2563EB",
     fontWeight: "700",
     marginBottom: 20,
   },
+
   titulo: {
     fontSize: 32,
     fontWeight: "800",
     color: "#222",
   },
+
   subtitulo: {
     fontSize: 17,
     color: "#666",
     marginTop: 7,
     marginBottom: 22,
   },
+
   formulario: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     padding: 18,
     elevation: 3,
   },
+
   formTitulo: {
     fontSize: 22,
     fontWeight: "800",
     color: "#222",
     marginBottom: 18,
   },
+
   label: {
     fontSize: 15,
     fontWeight: "700",
@@ -572,6 +592,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     marginTop: 10,
   },
+
   input: {
     height: 52,
     borderWidth: 1,
@@ -581,6 +602,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: "#FAFAFA",
   },
+
   salvarButton: {
     backgroundColor: "#2563EB",
     borderRadius: 14,
@@ -588,33 +610,40 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 20,
   },
+
   botaoDesabilitado: {
     opacity: 0.6,
   },
+
   salvarText: {
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "900",
     textAlign: "center",
   },
+
   cancelarButton: {
     padding: 15,
     alignItems: "center",
   },
+
   cancelarText: {
     color: "#DC2626",
     fontSize: 16,
     fontWeight: "700",
   },
+
   listaContainer: {
     marginTop: 25,
   },
+
   listaTitulo: {
     fontSize: 22,
     fontWeight: "800",
     color: "#222",
     marginBottom: 15,
   },
+
   atualizarButton: {
     alignSelf: "flex-start",
     backgroundColor: "#E0ECFF",
@@ -622,34 +651,41 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 16,
   },
+
   atualizarText: {
     color: "#2563EB",
     fontWeight: "800",
   },
+
   loading: {
     marginTop: 20,
   },
+
   vazio: {
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
     padding: 25,
     alignItems: "center",
   },
+
   vazioEmoji: {
     fontSize: 45,
     marginBottom: 10,
   },
+
   vazioTitulo: {
     fontSize: 18,
     fontWeight: "800",
     color: "#333",
     textAlign: "center",
   },
+
   vazioTexto: {
     color: "#777",
     textAlign: "center",
     marginTop: 7,
   },
+
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
@@ -657,22 +693,26 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     elevation: 3,
   },
+
   nomeMedicamento: {
     fontSize: 21,
     fontWeight: "900",
     color: "#222",
     marginBottom: 12,
   },
+
   info: {
     fontSize: 15,
     color: "#555",
     marginBottom: 6,
   },
+
   acoes: {
     flexDirection: "row",
     gap: 10,
     marginTop: 15,
   },
+
   editarButton: {
     flex: 1,
     backgroundColor: "#E0ECFF",
@@ -680,10 +720,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
   },
+
   editarText: {
     color: "#2563EB",
     fontWeight: "800",
   },
+
   excluirButton: {
     flex: 1,
     backgroundColor: "#FEE2E2",
@@ -691,26 +733,31 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
   },
+
   excluirText: {
     color: "#DC2626",
     fontWeight: "800",
   },
+
   erroContainer: {
     flex: 1,
     backgroundColor: "#F7F8FA",
     justifyContent: "center",
     padding: 25,
   },
+
   erroEmoji: {
     fontSize: 48,
     textAlign: "center",
   },
+
   erroTitulo: {
     fontSize: 24,
     fontWeight: "800",
     textAlign: "center",
     marginTop: 15,
   },
+
   erroTexto: {
     fontSize: 16,
     color: "#666",
