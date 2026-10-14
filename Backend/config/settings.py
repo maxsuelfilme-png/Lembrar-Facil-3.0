@@ -1,22 +1,38 @@
 
 from pathlib import Path
+from datetime import timedelta
 import os
 
 from dotenv import load_dotenv
 import dj_database_url
 
+
+# ======================================================
+# CONFIGURAÇÕES INICIAIS
+# ======================================================
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / ".env")
+
+
+# ======================================================
+# SEGURANÇA
+# ======================================================
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 
 if not SECRET_KEY:
     if os.getenv("RAILWAY_ENVIRONMENT"):
-        raise RuntimeError("Configure SECRET_KEY no Railway.")
+        raise RuntimeError(
+            "Configure SECRET_KEY no Railway."
+        )
+
     SECRET_KEY = "chave-local-apenas-para-desenvolvimento"
 
+
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
+
 
 ALLOWED_HOSTS = [
     "127.0.0.1",
@@ -25,19 +41,30 @@ ALLOWED_HOSTS = [
     ".railway.app",
 ]
 
+
 CSRF_TRUSTED_ORIGINS = [
     "https://lembrar-facil-30-production.up.railway.app",
 ]
 
+
+# ======================================================
+# APLICATIVOS INSTALADOS
+# ======================================================
+
 INSTALLED_APPS = [
+    # Django
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+
+    # Bibliotecas
     "rest_framework",
     "corsheaders",
+
+    # Aplicativos do LembraFácil
     "medicamentos",
     "usuarios",
     "horarios",
@@ -47,6 +74,11 @@ INSTALLED_APPS = [
     "cuidadores",
     "farmacias",
 ]
+
+
+# ======================================================
+# MIDDLEWARE
+# ======================================================
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -59,6 +91,11 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+
+# ======================================================
+# ROTAS E TEMPLATES
+# ======================================================
+
 ROOT_URLCONF = "config.urls"
 
 TEMPLATES = [
@@ -70,6 +107,7 @@ TEMPLATES = [
             "context_processors": [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
+                "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
             ],
         },
@@ -77,6 +115,11 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
+
+
+# ======================================================
+# BANCO DE DADOS
+# ======================================================
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -96,20 +139,42 @@ else:
         }
     }
 
+
+# ======================================================
+# VALIDAÇÃO DE SENHAS
+# ======================================================
+
 AUTH_PASSWORD_VALIDATORS = [
     {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+        "NAME": (
+            "django.contrib.auth.password_validation."
+            "UserAttributeSimilarityValidator"
+        ),
     },
     {
-        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "NAME": (
+            "django.contrib.auth.password_validation."
+            "MinimumLengthValidator"
+        ),
     },
     {
-        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
+        "NAME": (
+            "django.contrib.auth.password_validation."
+            "CommonPasswordValidator"
+        ),
     },
     {
-        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+        "NAME": (
+            "django.contrib.auth.password_validation."
+            "NumericPasswordValidator"
+        ),
     },
 ]
+
+
+# ======================================================
+# IDIOMA E FUSO HORÁRIO
+# ======================================================
 
 LANGUAGE_CODE = "pt-br"
 
@@ -119,23 +184,64 @@ USE_I18N = True
 
 USE_TZ = True
 
+
+# ======================================================
+# ARQUIVOS ESTÁTICOS E MÍDIA
+# ======================================================
+
 STATIC_URL = "static/"
 
 STATIC_ROOT = BASE_DIR / "staticfiles"
-
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-
-REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ),
-}
 
 MEDIA_URL = "/media/"
 
 MEDIA_ROOT = BASE_DIR / "media"
 
+
+# ======================================================
+# EMAIL
+# ======================================================
+
+EMAIL_BACKEND = (
+    "django.core.mail.backends.console.EmailBackend"
+)
+
+
+# ======================================================
+# DJANGO REST FRAMEWORK
+# ======================================================
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication."
+        "JWTAuthentication",
+    ),
+}
+
+
+# ======================================================
+# AUTENTICAÇÃO JWT
+# ======================================================
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": False,
+    "UPDATE_LAST_LOGIN": False,
+}
+
+
+# ======================================================
+# CORS
+# ======================================================
+
 CORS_ALLOW_ALL_ORIGINS = True
+
+
+# ======================================================
+# SEGURANÇA HTTPS
+# ======================================================
 
 SECURE_PROXY_SSL_HEADER = (
     "HTTP_X_FORWARDED_PROTO",
