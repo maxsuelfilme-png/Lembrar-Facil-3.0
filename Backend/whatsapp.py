@@ -1,7 +1,17 @@
 
 import os
 import re
+import logging
+
 import requests
+
+
+logger = logging.getLogger(__name__)
+
+GRAPH_API_VERSION = os.getenv(
+    "WHATSAPP_GRAPH_API_VERSION",
+    "v25.0"
+)
 
 
 def normalizar_telefone(telefone):
@@ -19,85 +29,27 @@ def normalizar_telefone(telefone):
     return numero
 
 
-def enviar_whatsapp(medicamento, horario, telefone):
+def enviar_template(telefone, nome_template, parametros):
     token = os.getenv("WHATSAPP_TOKEN")
     phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
 
     if not token or not phone_number_id:
-        print("Configurações da Meta não encontradas.")
+        logger.error(
+            "WhatsApp: token ou Phone Number ID não configurado."
+        )
         return False
 
     destinatario = normalizar_telefone(telefone)
 
     if not destinatario:
-        print("Telefone inválido.")
-        return False
-
-    url = f"https://graph.facebook.com/v25.0/{phone_number_id}/messages"
-
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
-
-    dados = {
-        "messaging_product": "whatsapp",
-        "to": destinatario,
-        "type": "template",
-        "template": {
-            "name": "medicamento_atrasado",
-            "language": {
-                "code": "pt_BR"
-            },
-            "components": [
-                {
-                    "type": "body",
-                    "parameters": [
-                        {
-                            "type": "text",
-                            "text": str(medicamento)
-                        },
-                        {
-                            "type": "text",
-                            "text": str(horario)
-                        }
-                    ]
-                }
-            ]
-        }
-    }
-
-    try:
-        resposta = requests.post(
-            url,
-            headers=headers,
-            json=dados,
-            timeout=20
+        logger.error(
+            "WhatsApp: telefone do destinatário inválido."
         )
-
-        print("STATUS META:", resposta.status_code)
-        print("RESPOSTA META:", resposta.text)
-
-        return resposta.ok
-
-    except requests.RequestException as erro:
-        print("Erro ao enviar WhatsApp:", erro)
-        return False
-
-def enviar_sos_whatsapp(nome_paciente, telefone):
-    import os
-    import requests
-
-    token = os.getenv("WHATSAPP_TOKEN")
-    phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
-
-    destinatario = normalizar_telefone(telefone)
-
-    if not token or not phone_number_id or not destinatario:
         return False
 
     url = (
-        f"https://graph.facebook.com/v25.0/"
+        f"https://graph.facebook.com/"
+        f"{GRAPH_API_VERSION}/"
         f"{phone_number_id}/messages"
     )
 
@@ -111,7 +63,7 @@ def enviar_sos_whatsapp(nome_paciente, telefone):
         "to": destinatario,
         "type": "template",
         "template": {
-            "name": "alerta_sos",
+            "name": nome_template,
             "language": {
                 "code": "pt_BR"
             },
@@ -121,8 +73,9 @@ def enviar_sos_whatsapp(nome_paciente, telefone):
                     "parameters": [
                         {
                             "type": "text",
-                            "text": str(nome_paciente)
+                            "text": str(parametro)
                         }
+                        for parametro in parametros
                     ]
                 }
             ]
@@ -134,13 +87,46 @@ def enviar_sos_whatsapp(nome_paciente, telefone):
             url,
             headers=headers,
             json=dados,
-            timeout=20
+            timeout=10
         )
 
-        print("STATUS SOS META:", resposta.status_code)
+        if resposta.ok:
+            logger.info(
+                "WhatsApp: solicitação aceita pela Meta. Template: %s",
+                nome_template
+            )
+            return True
 
-        return resposta.ok
-
-    except requests.RequestException as erro:
-        print("Erro ao solicitar SOS:", erro)
+        logger.error(
+            "WhatsApp: envio recusado. Template: %s | HTTP: %s",
+            nome_template,
+            resposta.status_code
+        )
         return False
+
+    except requests.RequestException:
+        logger.exception(
+            "WhatsApp: erro de conexão com a Meta."
+        )
+        return False
+
+
+def enviar_whatsapp(medicamento, horario, telefone):
+    return enviar_template(
+        telefone=telefone,
+        nome_template="medicamento_atrasado",
+        parametros=[
+            medicamento,
+            horario
+        ]
+    )
+
+
+def enviar_sos_whatsapp(nome_paciente, telefone):
+    return enviar_template(
+        telefone=telefone,
+        nome_template="alerta_sos",
+        parametros=[
+            nome_paciente
+        ]
+    )
