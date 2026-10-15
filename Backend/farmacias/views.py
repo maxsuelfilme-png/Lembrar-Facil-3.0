@@ -1,7 +1,13 @@
 
 from rest_framework import generics, viewsets, serializers
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, AuthenticationFailed
+
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+
+from pacientes.models import Paciente
+from cuidadores.models import Cuidador
 
 from .models import Farmacia, ProdutoFarmacia
 from .serializers import (
@@ -11,10 +17,53 @@ from .serializers import (
 )
 
 
+# ======================================================
+# 1. CADASTRO DA FARMÁCIA
+# ======================================================
+
 class CadastroFarmaciaView(generics.CreateAPIView):
     serializer_class = CadastroFarmaciaSerializer
     permission_classes = [AllowAny]
 
+
+# ======================================================
+# 2. LOGIN EXCLUSIVO DA FARMÁCIA
+# ======================================================
+
+class TokenFarmaciaSerializer(TokenObtainPairSerializer):
+
+    def validate(self, attrs):
+        dados = super().validate(attrs)
+
+        usuario = self.user
+
+        if not Farmacia.objects.filter(
+            usuario=usuario
+        ).exists():
+            raise AuthenticationFailed(
+                "Esta conta não possui cadastro de farmácia."
+            )
+
+        if (
+            Paciente.objects.filter(usuario=usuario).exists()
+            or Cuidador.objects.filter(usuario=usuario).exists()
+        ):
+            raise AuthenticationFailed(
+                "Esta conta possui outro tipo de perfil. "
+                "Utilize uma conta exclusiva de farmácia."
+            )
+
+        return dados
+
+
+class LoginFarmaciaView(TokenObtainPairView):
+    serializer_class = TokenFarmaciaSerializer
+    permission_classes = [AllowAny]
+
+
+# ======================================================
+# 3. PERFIL DA FARMÁCIA
+# ======================================================
 
 class MinhaFarmaciaView(generics.RetrieveUpdateAPIView):
     serializer_class = FarmaciaSerializer
@@ -37,6 +86,10 @@ class MinhaFarmaciaView(generics.RetrieveUpdateAPIView):
 
         return farmacia
 
+
+# ======================================================
+# 4. GERENCIAMENTO DE PRODUTOS
+# ======================================================
 
 class ProdutoFarmaciaViewSet(viewsets.ModelViewSet):
     serializer_class = ProdutoFarmaciaSerializer
@@ -67,7 +120,12 @@ class ProdutoFarmaciaViewSet(viewsets.ModelViewSet):
         serializer.save(farmacia=farmacia)
 
 
+# ======================================================
+# 5. SERIALIZER DO CATÁLOGO DE PRODUTOS
+# ======================================================
+
 class CatalogoProdutoSerializer(serializers.ModelSerializer):
+
     farmacia_nome = serializers.CharField(
         source="farmacia.nome",
         read_only=True
@@ -103,6 +161,10 @@ class CatalogoProdutoSerializer(serializers.ModelSerializer):
         ]
 
 
+# ======================================================
+# 6. CATÁLOGO PÚBLICO DAS FARMÁCIAS
+# ======================================================
+
 class CatalogoFarmaciasView(generics.ListAPIView):
     serializer_class = CatalogoProdutoSerializer
     permission_classes = [AllowAny]
@@ -127,7 +189,12 @@ class CatalogoFarmaciasView(generics.ListAPIView):
         return queryset
 
 
+# ======================================================
+# 7. SERIALIZER DO MAPA DE FARMÁCIAS
+# ======================================================
+
 class FarmaciasMapaSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = Farmacia
         fields = [
@@ -144,6 +211,10 @@ class FarmaciasMapaSerializer(serializers.ModelSerializer):
             "whatsapp",
         ]
 
+
+# ======================================================
+# 8. MAPA DE FARMÁCIAS PARCEIRAS
+# ======================================================
 
 class FarmaciasMapaView(generics.ListAPIView):
     serializer_class = FarmaciasMapaSerializer
