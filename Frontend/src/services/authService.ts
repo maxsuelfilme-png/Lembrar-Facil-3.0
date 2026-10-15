@@ -9,26 +9,33 @@ const API_ONLINE =
   "https://lembrar-facil-30-production.up.railway.app/api";
 
 const API_LOCAL =
-  "http://192.168.1.100:8000/api";
+  "http://10.172.255.132:8000/api";
 
-export const MODO_API: "online" | "local" = "online";
+export const MODO_API: "online" | "online" = "online";
 
 export const API_URL =
   MODO_API === "online" ? API_ONLINE : API_LOCAL;
 
 // ======================================================
-// CHAVES DE ARMAZENAMENTO
+// CHAVES DAS SESSÕES
 // ======================================================
 
-// Sessão tradicional: familiar e demais usuários.
-// Mantidas para compatibilidade com o código existente.
 const ACCESS_TOKEN_KEY = "@lembrafacil:access_token";
 const REFRESH_TOKEN_KEY = "@lembrafacil:refresh_token";
 
-// Sessão independente do idoso.
+const FARMACIA_ACCESS_KEY =
+  "@lembrafacil:farmacia_access";
+const FARMACIA_REFRESH_KEY =
+  "@lembrafacil:farmacia_refresh";
+
 const IDOSO_ACCESS_KEY = "@lembrafacil:idoso_access";
 const IDOSO_REFRESH_KEY = "@lembrafacil:idoso_refresh";
-const IDOSO_PACIENTE_KEY = "@lembrafacil:idoso_paciente_id";
+const IDOSO_PACIENTE_KEY =
+  "@lembrafacil:idoso_paciente_id";
+
+// ======================================================
+// TIPOS
+// ======================================================
 
 type LoginResponse = {
   access: string;
@@ -44,24 +51,40 @@ type AtivacaoPacienteResponse = LoginResponse & {
   paciente_id: number;
 };
 
-type TipoSessao = "usuario" | "idoso";
+type TipoSessao = "usuario" | "farmacia" | "idoso";
+
+type ChavesSessao = {
+  access: string;
+  refresh: string;
+};
+
+// ======================================================
+// CONTROLE DE REQUISIÇÕES
+// ======================================================
 
 const renovacoes: Partial<
   Record<TipoSessao, Promise<string | null>>
 > = {};
 
-let ativacaoIdosoEmAndamento:
-  Promise<string> | null = null;
+let ativacaoIdosoEmAndamento: Promise<string> | null =
+  null;
 
 // ======================================================
-// CONFIGURAÇÃO DAS SESSÕES
+// CHAVES DE CADA SESSÃO
 // ======================================================
 
-function chavesSessao(tipo: TipoSessao) {
+function chavesSessao(tipo: TipoSessao): ChavesSessao {
   if (tipo === "idoso") {
     return {
       access: IDOSO_ACCESS_KEY,
       refresh: IDOSO_REFRESH_KEY,
+    };
+  }
+
+  if (tipo === "farmacia") {
+    return {
+      access: FARMACIA_ACCESS_KEY,
+      refresh: FARMACIA_REFRESH_KEY,
     };
   }
 
@@ -70,6 +93,10 @@ function chavesSessao(tipo: TipoSessao) {
     refresh: REFRESH_TOKEN_KEY,
   };
 }
+
+// ======================================================
+// SALVAR E LIMPAR SESSÃO
+// ======================================================
 
 async function salvarSessao(
   tipo: TipoSessao,
@@ -95,27 +122,69 @@ async function limparSessao(
 }
 
 // ======================================================
-// LOGIN TRADICIONAL
+// MENSAGENS DE ERRO DA API
 // ======================================================
 
-export async function fazerLogin(
+async function mensagemErro(
+  response: Response,
+  padrao: string
+): Promise<string> {
+  const dados = await response.json().catch(() => null);
+
+  if (!dados) {
+    return padrao;
+  }
+
+  if (typeof dados.detail === "string") {
+    return dados.detail;
+  }
+
+  if (typeof dados === "object") {
+    const mensagens = Object.values(dados)
+      .flat()
+      .map(String)
+      .join("\n");
+
+    return mensagens || padrao;
+  }
+
+  return padrao;
+}
+
+// ======================================================
+// LOGIN COM JWT
+// ======================================================
+
+async function autenticar(
   username: string,
-  password: string
+  password: string,
+  tipo: "usuario" | "farmacia"
 ): Promise<LoginResponse> {
-  const response = await fetch(`${API_URL}/token/`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      username: username.trim(),
-      password,
-    }),
-  });
+  const endpoint =
+    tipo === "farmacia"
+      ? "/farmacias/token/"
+      : "/token/";
+
+  const response = await fetch(
+    `${API_URL}${endpoint}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: username.trim(),
+        password,
+      }),
+    }
+  );
 
   if (!response.ok) {
     throw new Error(
-      "Não foi possível entrar. Confira seu usuário e senha."
+      await mensagemErro(
+        response,
+        "Não foi possível entrar. Confira seu usuário e senha."
+      )
     );
   }
 
@@ -127,13 +196,35 @@ export async function fazerLogin(
     );
   }
 
-  await salvarSessao("usuario", dados);
+  await salvarSessao(tipo, dados);
 
   return dados;
 }
 
 // ======================================================
-// CADASTRO TRADICIONAL
+// LOGIN DO FAMILIAR
+// ======================================================
+
+export async function fazerLogin(
+  username: string,
+  password: string
+): Promise<LoginResponse> {
+  return autenticar(username, password, "usuario");
+}
+
+// ======================================================
+// LOGIN EXCLUSIVO DA FARMÁCIA
+// ======================================================
+
+export async function fazerLoginFarmacia(
+  username: string,
+  password: string
+): Promise<LoginResponse> {
+  return autenticar(username, password, "farmacia");
+}
+
+// ======================================================
+// CADASTRO DO FAMILIAR
 // ======================================================
 
 export async function cadastrarEFazerLogin(
@@ -157,16 +248,12 @@ export async function cadastrarEFazerLogin(
   );
 
   if (!response.ok) {
-    const erro = await response.json().catch(() => null);
-
-    const mensagem = erro
-      ? Object.values(erro)
-          .flat()
-          .map(String)
-          .join("\n")
-      : "Não foi possível realizar o cadastro.";
-
-    throw new Error(mensagem);
+    throw new Error(
+      await mensagemErro(
+        response,
+        "Não foi possível realizar o cadastro."
+      )
+    );
   }
 
   return fazerLogin(username, password);
@@ -197,7 +284,9 @@ export async function pegarPacienteId():
     IDOSO_PACIENTE_KEY
   );
 
-  if (!valor) return null;
+  if (!valor) {
+    return null;
+  }
 
   const id = Number(valor);
 
@@ -207,15 +296,17 @@ export async function pegarPacienteId():
 }
 
 // ======================================================
-// VERIFICAR EXPIRAÇÃO DO JWT
+// DECODIFICAR JWT
 // ======================================================
 
-function tokenValido(token: string): boolean {
+function decodificarPayloadJWT(
+  token: string
+): Record<string, unknown> | null {
   try {
     const partes = token.split(".");
 
     if (partes.length !== 3) {
-      return false;
+      return null;
     }
 
     const base64 = partes[1]
@@ -232,7 +323,9 @@ function tokenValido(token: string): boolean {
     for (const caractere of base64.replace(/=+$/, "")) {
       const indice = caracteres.indexOf(caractere);
 
-      if (indice < 0) return false;
+      if (indice < 0) {
+        return null;
+      }
 
       valor = (valor << 6) | indice;
       bits += 6;
@@ -247,17 +340,36 @@ function tokenValido(token: string): boolean {
 
     const payload = JSON.parse(resultado);
 
-    return (
-      typeof payload.exp === "number" &&
-      payload.exp * 1000 > Date.now() + 30000
-    );
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      Array.isArray(payload)
+    ) {
+      return null;
+    }
+
+    return payload;
   } catch {
-    return false;
+    return null;
   }
 }
 
 // ======================================================
-// RENOVAR SESSÃO
+// VALIDAR EXPIRAÇÃO DO JWT
+// ======================================================
+
+function tokenValido(token: string): boolean {
+  const payload = decodificarPayloadJWT(token);
+
+  return (
+    payload !== null &&
+    typeof payload.exp === "number" &&
+    payload.exp * 1000 > Date.now() + 30000
+  );
+}
+
+// ======================================================
+// RENOVAÇÃO DOS TOKENS
 // ======================================================
 
 async function executarRenovacao(
@@ -269,7 +381,9 @@ async function executarRenovacao(
     chaves.refresh
   );
 
-  if (!refresh) return null;
+  if (!refresh) {
+    return null;
+  }
 
   try {
     const response = await fetch(
@@ -284,6 +398,11 @@ async function executarRenovacao(
     );
 
     if (!response.ok) {
+      console.warn("Falha na renovação:", {
+        tipo,
+        statusHTTP: response.status,
+      });
+
       if (
         response.status === 401 ||
         response.status === 403
@@ -306,7 +425,10 @@ async function executarRenovacao(
     ];
 
     if (dados.refresh) {
-      itens.push([chaves.refresh, dados.refresh]);
+      itens.push([
+        chaves.refresh,
+        dados.refresh,
+      ]);
     }
 
     await AsyncStorage.multiSet(itens);
@@ -317,9 +439,14 @@ async function executarRenovacao(
       `Erro ao renovar sessão ${tipo}:`,
       erro
     );
+
     return null;
   }
 }
+
+// ======================================================
+// EVITAR RENOVAÇÕES SIMULTÂNEAS
+// ======================================================
 
 async function renovarSessao(
   tipo: TipoSessao
@@ -340,9 +467,18 @@ async function renovarSessao(
   }
 }
 
+// ======================================================
+// RENOVAÇÃO POR TIPO DE USUÁRIO
+// ======================================================
+
 export async function renovarAccessToken():
   Promise<string | null> {
   return renovarSessao("usuario");
+}
+
+export async function renovarAccessTokenFarmacia():
+  Promise<string | null> {
+  return renovarSessao("farmacia");
 }
 
 export async function renovarAccessTokenIdoso():
@@ -370,15 +506,93 @@ async function obterTokenDaSessao(
   return renovarSessao(tipo);
 }
 
-// Mantém compatibilidade com o familiar.
 export async function obterTokenValido():
   Promise<string | null> {
   return obterTokenDaSessao("usuario");
 }
 
+export async function obterTokenValidoFarmacia():
+  Promise<string | null> {
+  return obterTokenDaSessao("farmacia");
+}
+
+export async function obterTokenValidoIdoso():
+  Promise<string | null> {
+  return obterTokenDaSessao("idoso");
+}
+
+// ======================================================
+// DIAGNÓSTICO DO FAMILIAR
+// ======================================================
+
+export async function diagnosticarUsuarioFamiliar() {
+  const token = await obterTokenValido();
+
+  if (!token) {
+    console.log(
+      "DIAGNÓSTICO FAMILIAR: nenhum usuário conectado."
+    );
+    return null;
+  }
+
+  const payload = decodificarPayloadJWT(token);
+
+  if (!payload) {
+    return null;
+  }
+
+  const diagnostico = {
+    user_id: payload.user_id ?? null,
+    token_type: payload.token_type ?? null,
+  };
+
+  console.log(
+    "DIAGNÓSTICO FAMILIAR:",
+    diagnostico
+  );
+
+  return diagnostico;
+}
+
+// ======================================================
+// VERIFICAR LOGIN DO FAMILIAR
+// ======================================================
+
 export async function estaLogado():
   Promise<boolean> {
-  return !!(await obterTokenValido());
+  return Boolean(await obterTokenValido());
+}
+
+// ======================================================
+// DIAGNÓSTICO DA SESSÃO DO IDOSO
+// ======================================================
+
+export async function diagnosticarSessaoIdoso() {
+  const access = await AsyncStorage.getItem(
+    IDOSO_ACCESS_KEY
+  );
+
+  const refresh = await AsyncStorage.getItem(
+    IDOSO_REFRESH_KEY
+  );
+
+  const pacienteId = await pegarPacienteId();
+
+  const diagnostico = {
+    possuiAccess: Boolean(access),
+    accessAindaValido: access
+      ? tokenValido(access)
+      : false,
+    possuiRefresh: Boolean(refresh),
+    possuiPacienteId: pacienteId !== null,
+  };
+
+  console.log(
+    "DIAGNÓSTICO DA SESSÃO DO IDOSO:",
+    diagnostico
+  );
+
+  return diagnostico;
 }
 
 // ======================================================
@@ -395,12 +609,10 @@ async function executarAtivacaoIdoso():
     return tokenExistente;
   }
 
-  // Se ainda existe refresh, não criamos outra
-  // conta automaticamente: evitamos perder
-  // o vínculo com o paciente anterior.
-  const refreshExistente = await AsyncStorage.getItem(
-    IDOSO_REFRESH_KEY
-  );
+  const refreshExistente =
+    await AsyncStorage.getItem(
+      IDOSO_REFRESH_KEY
+    );
 
   const pacienteExistente = await pegarPacienteId();
 
@@ -422,10 +634,8 @@ async function executarAtivacaoIdoso():
   );
 
   if (!response.ok) {
-    const texto = await response.text();
-
     throw new Error(
-      `Não foi possível ativar o paciente (${response.status}): ${texto.substring(0, 200)}`
+      `Não foi possível ativar o paciente. Erro HTTP ${response.status}.`
     );
   }
 
@@ -442,15 +652,25 @@ async function executarAtivacaoIdoso():
     );
   }
 
-  await salvarSessao("idoso", dados);
+  await AsyncStorage.multiSet([
+    [IDOSO_ACCESS_KEY, dados.access],
+    [IDOSO_REFRESH_KEY, dados.refresh],
+    [
+      IDOSO_PACIENTE_KEY,
+      String(dados.paciente_id),
+    ],
+  ]);
 
-  await AsyncStorage.setItem(
-    IDOSO_PACIENTE_KEY,
-    String(dados.paciente_id)
+  console.log(
+    "Primeira sessão do idoso ativada com sucesso."
   );
 
   return dados.access;
 }
+
+// ======================================================
+// INICIAR SESSÃO DO IDOSO
+// ======================================================
 
 export async function iniciarSessaoIdoso():
   Promise<string> {
@@ -468,17 +688,37 @@ export async function iniciarSessaoIdoso():
   }
 }
 
-export async function obterTokenValidoIdoso():
-  Promise<string | null> {
-  return obterTokenDaSessao("idoso");
+// ======================================================
+// LOGOUT DO FAMILIAR
+// ======================================================
+
+export async function logout(): Promise<void> {
+  await limparSessao("usuario");
 }
 
 // ======================================================
-// LOGOUT
+// LOGOUT DA FARMÁCIA
 // ======================================================
 
-// Sair da conta do familiar não apaga
-// a conta automática do idoso.
-export async function logout(): Promise<void> {
-  await limparSessao("usuario");
+export async function logoutFarmacia():
+  Promise<void> {
+  await limparSessao("farmacia");
+}
+
+// ======================================================
+// LIMPEZA DA SESSÃO ANTIGA DO IDOSO
+// SOMENTE PARA TESTES
+// ======================================================
+
+export async function limparSessaoAntigaIdoso():
+  Promise<void> {
+  await AsyncStorage.multiRemove([
+    IDOSO_ACCESS_KEY,
+    IDOSO_REFRESH_KEY,
+    IDOSO_PACIENTE_KEY,
+  ]);
+
+  console.log(
+    "Sessão antiga do idoso removida do celular."
+  );
 }

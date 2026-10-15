@@ -1,26 +1,25 @@
 
 from django.urls import path
 
-from rest_framework_simplejwt.views import TokenObtainPairView
-
 from .views import (
     CadastroUsuarioView,
+    LoginFamiliarView,
     ativar_paciente,
 )
 
 
 urlpatterns = [
-    # Cadastro tradicional do familiar
+    # Cadastro do familiar
     path(
         "cadastro/",
         CadastroUsuarioView.as_view(),
         name="cadastro_usuario",
     ),
 
-    # Login com usuário e senha
+    # Login exclusivo do familiar
     path(
         "token/",
-        TokenObtainPairView.as_view(),
+        LoginFamiliarView.as_view(),
         name="token_usuario",
     ),
 

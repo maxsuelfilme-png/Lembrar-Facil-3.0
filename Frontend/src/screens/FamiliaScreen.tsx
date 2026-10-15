@@ -29,12 +29,17 @@ import {
   type VinculoPaciente,
 } from "../services/vinculosService";
 
+// ======================================================
+// TELA FAMÍLIA - LEMBRAFÁCIL
+// ======================================================
+
 export default function FamiliaScreen() {
   const router = useRouter();
 
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
   const [codigo, setCodigo] = useState("");
+
   const [vinculos, setVinculos] = useState<VinculoPaciente[]>([]);
 
   const [carregando, setCarregando] = useState(true);
@@ -42,9 +47,9 @@ export default function FamiliaScreen() {
   const [vinculando, setVinculando] = useState(false);
   const [erro, setErro] = useState("");
 
-  // ========================================
+  // ====================================================
   // CARREGAR DADOS
-  // ========================================
+  // ====================================================
 
   const carregar = useCallback(async () => {
     try {
@@ -76,9 +81,9 @@ export default function FamiliaScreen() {
     }, [carregar])
   );
 
-  // ========================================
+  // ====================================================
   // SALVAR FAMILIAR
-  // ========================================
+  // ====================================================
 
   async function salvar() {
     if (!nome.trim() || !telefone.trim()) {
@@ -116,9 +121,9 @@ export default function FamiliaScreen() {
     }
   }
 
-  // ========================================
+  // ====================================================
   // VINCULAR IDOSO
-  // ========================================
+  // ====================================================
 
   async function confirmarVinculo() {
     const codigoLimpo = codigo.trim().toUpperCase();
@@ -157,10 +162,9 @@ export default function FamiliaScreen() {
     }
   }
 
-  // ========================================
+  // ====================================================
   // IDENTIFICAR IDOSO
-  // CORRIGIDO PARA O SERIALIZER DJANGO
-  // ========================================
+  // ====================================================
 
   function pacienteId(v: VinculoPaciente): number {
     return v.paciente;
@@ -170,9 +174,9 @@ export default function FamiliaScreen() {
     return v.paciente_nome || `Paciente #${v.paciente}`;
   }
 
-  // ========================================
+  // ====================================================
   // ABRIR MEDICAMENTOS
-  // ========================================
+  // ====================================================
 
   function abrirMedicamentos(id: number) {
     if (!Number.isInteger(id) || id <= 0) {
@@ -192,15 +196,20 @@ export default function FamiliaScreen() {
     });
   }
 
-  // ========================================
+  // ====================================================
   // INTERFACE
-  // ========================================
+  // ====================================================
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <SafeAreaView
+      style={styles.container}
+      edges={["top"]}
+    >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={
+          Platform.OS === "ios" ? "padding" : undefined
+        }
       >
         <ScrollView
           contentContainerStyle={styles.content}
@@ -218,12 +227,17 @@ export default function FamiliaScreen() {
               size={24}
               color="#2563EB"
             />
-            <Text style={styles.voltarTexto}>Voltar</Text>
+
+            <Text style={styles.voltarTexto}>
+              Voltar
+            </Text>
           </TouchableOpacity>
 
           {/* CABEÇALHO */}
 
-          <Text style={styles.titulo}>Área da família 💚</Text>
+          <Text style={styles.titulo}>
+            Área da família 💚
+          </Text>
 
           <Text style={styles.subtitulo}>
             Cuide de quem você ama, acompanhe medicamentos
@@ -238,12 +252,15 @@ export default function FamiliaScreen() {
               size={43}
               color="#16A34A"
             />
+
             <View style={{ flex: 1 }}>
               <Text style={styles.heroTitulo}>
                 Cuidando de quem você ama
               </Text>
+
               <Text style={styles.texto}>
-                Compartilhe a rotina de medicamentos com segurança.
+                Compartilhe a rotina de medicamentos
+                com segurança.
               </Text>
             </View>
           </View>
@@ -260,16 +277,25 @@ export default function FamiliaScreen() {
 
               {!!erro && (
                 <View style={styles.aviso}>
-                  <Text style={styles.avisoTexto}>{erro}</Text>
-                  <TouchableOpacity onPress={() => void carregar()}>
-                    <Text style={styles.link}>Tentar novamente</Text>
+                  <Text style={styles.avisoTexto}>
+                    {erro}
+                  </Text>
+
+                  <TouchableOpacity
+                    onPress={() => void carregar()}
+                  >
+                    <Text style={styles.link}>
+                      Tentar novamente
+                    </Text>
                   </TouchableOpacity>
                 </View>
               )}
 
               {/* FAMILIAR */}
 
-              <Text style={styles.secao}>Familiar responsável</Text>
+              <Text style={styles.secao}>
+                Familiar responsável
+              </Text>
 
               <View style={styles.card}>
                 <Text style={styles.label}>Nome</Text>
@@ -282,7 +308,9 @@ export default function FamiliaScreen() {
                   onChangeText={setNome}
                 />
 
-                <Text style={styles.label}>Telefone / WhatsApp</Text>
+                <Text style={styles.label}>
+                  Telefone / WhatsApp
+                </Text>
 
                 <TextInput
                   style={styles.input}
@@ -294,7 +322,7 @@ export default function FamiliaScreen() {
                 />
 
                 <Text style={styles.ajuda}>
-                  Este número poderá ser utilizado futuramente
+                  Este número poderá ser utilizado
                   para receber alertas.
                 </Text>
 
@@ -316,9 +344,11 @@ export default function FamiliaScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* CÓDIGO DE VINCULAÇÃO */}
+              {/* VINCULAR IDOSO */}
 
-              <Text style={styles.secao}>Vincular um idoso</Text>
+              <Text style={styles.secao}>
+                Vincular um idoso
+              </Text>
 
               <View style={styles.card}>
                 <Text style={styles.cardTitulo}>
@@ -331,7 +361,10 @@ export default function FamiliaScreen() {
                 </Text>
 
                 <TextInput
-                  style={[styles.input, { marginTop: 15 }]}
+                  style={[
+                    styles.input,
+                    { marginTop: 15 },
+                  ]}
                   placeholder="Código de 16 caracteres"
                   placeholderTextColor="#94A3B8"
                   value={codigo}
@@ -368,9 +401,13 @@ export default function FamiliaScreen() {
 
               {/* IDOSOS VINCULADOS */}
 
-              <Text style={styles.secao}>Idosos vinculados</Text>
+              <Text style={styles.secao}>
+                Idosos vinculados
+              </Text>
 
-              {vinculos.filter((v) => v.ativo !== false).length === 0 ? (
+              {vinculos.filter(
+                (v) => v.ativo !== false
+              ).length === 0 ? (
                 <View style={styles.card}>
                   <Text style={styles.texto}>
                     Nenhum idoso vinculado ainda.
@@ -413,7 +450,9 @@ export default function FamiliaScreen() {
 
               {/* ACOMPANHAMENTO */}
 
-              <Text style={styles.secao}>Acompanhamento</Text>
+              <Text style={styles.secao}>
+                Acompanhamento
+              </Text>
 
               <TouchableOpacity
                 style={styles.opcao}
@@ -429,6 +468,7 @@ export default function FamiliaScreen() {
                   <Text style={styles.cardTitulo}>
                     Rotina de hoje
                   </Text>
+
                   <Text style={styles.texto}>
                     Veja horários e confirmações dos medicamentos.
                   </Text>
@@ -451,7 +491,10 @@ export default function FamiliaScreen() {
                 />
 
                 <View style={styles.opcaoConteudo}>
-                  <Text style={styles.cardTitulo}>Alertas</Text>
+                  <Text style={styles.cardTitulo}>
+                    Alertas
+                  </Text>
+
                   <Text style={styles.texto}>
                     Avisos automáticos ainda dependem da
                     configuração do serviço.
@@ -484,6 +527,7 @@ export default function FamiliaScreen() {
                   <Text style={styles.cardTitulo}>
                     Encontrar farmácias
                   </Text>
+
                   <Text style={styles.texto}>
                     Pesquise medicamentos e compare preços.
                   </Text>
@@ -510,6 +554,7 @@ export default function FamiliaScreen() {
                   <Text style={styles.cardTitulo}>
                     Ver farmácias no mapa
                   </Text>
+
                   <Text style={styles.texto}>
                     Localize farmácias parceiras.
                   </Text>
@@ -524,7 +569,9 @@ export default function FamiliaScreen() {
 
               <TouchableOpacity
                 style={styles.opcao}
-                onPress={() => router.push("/farmacias-reposicao")}
+                onPress={() =>
+                  router.push("/farmacias-reposicao")
+                }
               >
                 <Ionicons
                   name="notifications-outline"
@@ -536,6 +583,7 @@ export default function FamiliaScreen() {
                   <Text style={styles.cardTitulo}>
                     Reposição de medicamentos
                   </Text>
+
                   <Text style={styles.texto}>
                     Acompanhe estoque e solicitações.
                   </Text>
@@ -552,7 +600,7 @@ export default function FamiliaScreen() {
 
               <View style={styles.rodape}>
                 <Text style={styles.rodapeTexto}>
-                  🛡️ Cuidado e segurança   💚 Sempre por perto
+                  🛡️ Cuidado e segurança 💚 Sempre por perto
                 </Text>
               </View>
             </>
@@ -563,9 +611,9 @@ export default function FamiliaScreen() {
   );
 }
 
-// ========================================
+// ======================================================
 // ESTILOS
-// ========================================
+// ======================================================
 
 const styles = StyleSheet.create({
   container: {

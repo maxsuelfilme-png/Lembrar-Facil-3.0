@@ -1,5 +1,12 @@
 
-import { API_URL, obterTokenValido } from "./authService";
+import {
+  API_URL,
+  obterTokenValidoFarmacia,
+} from "./authService";
+
+// ======================================================
+// 1. TIPOS - CADASTRO DA FARMÁCIA
+// ======================================================
 
 export type CadastroFarmacia = {
   username: string;
@@ -17,6 +24,10 @@ export type CadastroFarmacia = {
   taxa_entrega: string | null;
 };
 
+// ======================================================
+// 2. TIPOS - PERFIL DA FARMÁCIA
+// ======================================================
+
 export type PerfilFarmacia = {
   id: number;
   nome: string;
@@ -33,6 +44,10 @@ export type PerfilFarmacia = {
   parceira: boolean;
   ativa: boolean;
 };
+
+// ======================================================
+// 3. TIPOS - PRODUTOS
+// ======================================================
 
 export type ProdutoFarmacia = {
   id: number;
@@ -52,7 +67,11 @@ export type DadosProdutoFarmacia = {
   disponivel: boolean;
 };
 
-export type ProdutoCatalogo = {
+// ======================================================
+// 4. TIPOS - CATÁLOGO PÚBLICO
+// ======================================================
+
+export type ProdutoCatalogoFarmacia = {
   id: number;
   nome: string;
   descricao: string;
@@ -64,6 +83,13 @@ export type ProdutoCatalogo = {
   farmacia_faz_entrega: boolean;
 };
 
+// Nome utilizado pela tela farmacias-busca.tsx
+export type ProdutoCatalogo = ProdutoCatalogoFarmacia;
+
+// ======================================================
+// 5. TIPOS - MAPA DE FARMÁCIAS
+// ======================================================
+
 export type FarmaciaMapa = {
   id: number;
   nome: string;
@@ -71,52 +97,69 @@ export type FarmaciaMapa = {
   cidade: string;
   estado: string;
   cep: string;
-  latitude: string | number;
-  longitude: string | number;
+  latitude: number | string | null;
+  longitude: number | string | null;
   faz_entrega: boolean;
   telefone: string;
   whatsapp: string;
 };
 
-type RespostaLista<T> = T[] | { results: T[] };
+// ======================================================
+// 6. TRATAMENTO DE RESPOSTAS DA API
+// ======================================================
 
-function extrairLista<T>(resultado: RespostaLista<T>): T[] {
-  return Array.isArray(resultado)
-    ? resultado
-    : resultado.results ?? [];
-}
-
-async function obterMensagemErro(
+async function tratarResposta<T>(
   response: Response
-): Promise<string> {
-  const dados = await response.json().catch(() => null);
+): Promise<T> {
+  if (!response.ok) {
+    const erro = await response.json().catch(() => null);
 
-  if (!dados) {
-    return "Não foi possível concluir a solicitação.";
+    let mensagem = "Não foi possível concluir a operação.";
+
+    if (typeof erro?.detail === "string") {
+      mensagem = erro.detail;
+    } else if (erro && typeof erro === "object") {
+      mensagem = Object.values(erro)
+        .flat()
+        .map(String)
+        .join("\n");
+    }
+
+    throw new Error(mensagem);
   }
 
-  if (typeof dados.detail === "string") {
-    return dados.detail;
+  if (response.status === 204) {
+    return undefined as T;
   }
 
-  if (Array.isArray(dados)) {
-    return dados.map(String).join("\n");
-  }
-
-  if (typeof dados === "object") {
-    return Object.entries(dados)
-      .map(([campo, mensagens]) => {
-        const texto = Array.isArray(mensagens)
-          ? mensagens.join(", ")
-          : String(mensagens);
-
-        return `${campo}: ${texto}`;
-      })
-      .join("\n");
-  }
-
-  return String(dados);
+  return (await response.json()) as T;
 }
+
+// ======================================================
+// 7. AUTENTICAÇÃO EXCLUSIVA DA FARMÁCIA
+// ======================================================
+
+async function cabecalhoFarmacia(): Promise<{
+  "Content-Type": string;
+  Authorization: string;
+}> {
+  const token = await obterTokenValidoFarmacia();
+
+  if (!token) {
+    throw new Error(
+      "Sessão da farmácia expirada. Faça login novamente."
+    );
+  }
+
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+}
+
+// ======================================================
+// 8. CADASTRAR FARMÁCIA
+// ======================================================
 
 export async function cadastrarFarmacia(
   dados: CadastroFarmacia
@@ -132,148 +175,165 @@ export async function cadastrarFarmacia(
     }
   );
 
-  if (!response.ok) {
-    throw new Error(await obterMensagemErro(response));
-  }
-
-  return response.json();
+  return tratarResposta<PerfilFarmacia>(response);
 }
 
-export async function buscarMinhaFarmacia(): Promise<PerfilFarmacia> {
-  const token = await obterTokenValido();
+// ======================================================
+// 9. BUSCAR PERFIL DA FARMÁCIA
+// ======================================================
 
-  if (!token) {
-    throw new Error(
-      "Sua sessão expirou. Faça login novamente."
-    );
-  }
-
+export async function buscarMinhaFarmacia():
+  Promise<PerfilFarmacia> {
   const response = await fetch(
     `${API_URL}/farmacias/meu-perfil/`,
     {
       method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: await cabecalhoFarmacia(),
     }
   );
 
-  if (!response.ok) {
-    throw new Error(await obterMensagemErro(response));
-  }
-
-  return response.json();
+  return tratarResposta<PerfilFarmacia>(response);
 }
 
-async function requisicaoProdutos<T>(
-  caminho: string,
-  metodo: "GET" | "POST" | "PATCH" | "DELETE" = "GET",
-  dados?: DadosProdutoFarmacia
-): Promise<T> {
-  const token = await obterTokenValido();
+// ======================================================
+// 10. ATUALIZAR PERFIL DA FARMÁCIA
+// ======================================================
 
-  if (!token) {
-    throw new Error(
-      "Faça login na farmácia novamente."
-    );
-  }
-
+export async function atualizarMinhaFarmacia(
+  dados: Partial<PerfilFarmacia>
+): Promise<PerfilFarmacia> {
   const response = await fetch(
-    `${API_URL}/farmacias/produtos/${caminho}`,
+    `${API_URL}/farmacias/meu-perfil/`,
     {
-      method: metodo,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      ...(dados !== undefined
-        ? { body: JSON.stringify(dados) }
-        : {}),
+      method: "PATCH",
+      headers: await cabecalhoFarmacia(),
+      body: JSON.stringify(dados),
     }
   );
 
-  if (!response.ok) {
-    throw new Error(await obterMensagemErro(response));
-  }
-
-  if (response.status === 204) {
-    return null as T;
-  }
-
-  return response.json();
+  return tratarResposta<PerfilFarmacia>(response);
 }
 
-export async function listarProdutosFarmacia(): Promise<ProdutoFarmacia[]> {
-  const resultado = await requisicaoProdutos<
-    RespostaLista<ProdutoFarmacia>
-  >("");
+// ======================================================
+// 11. LISTAR PRODUTOS DA FARMÁCIA
+// ======================================================
 
-  return extrairLista(resultado);
+export async function listarProdutosFarmacia():
+  Promise<ProdutoFarmacia[]> {
+  const response = await fetch(
+    `${API_URL}/farmacias/produtos/`,
+    {
+      method: "GET",
+      headers: await cabecalhoFarmacia(),
+    }
+  );
+
+  return tratarResposta<ProdutoFarmacia[]>(response);
 }
 
+// ======================================================
+// 12. CADASTRAR PRODUTO
+// ======================================================
+
+export async function cadastrarProdutoFarmacia(
+  dados: DadosProdutoFarmacia
+): Promise<ProdutoFarmacia> {
+  const response = await fetch(
+    `${API_URL}/farmacias/produtos/`,
+    {
+      method: "POST",
+      headers: await cabecalhoFarmacia(),
+      body: JSON.stringify(dados),
+    }
+  );
+
+  return tratarResposta<ProdutoFarmacia>(response);
+}
+
+// Nome utilizado pela tela farmacia-painel.tsx
 export async function adicionarProdutoFarmacia(
   dados: DadosProdutoFarmacia
 ): Promise<ProdutoFarmacia> {
-  return requisicaoProdutos<ProdutoFarmacia>(
-    "",
-    "POST",
-    dados
-  );
+  return cadastrarProdutoFarmacia(dados);
 }
+
+// ======================================================
+// 13. ATUALIZAR PRODUTO
+// ======================================================
 
 export async function atualizarProdutoFarmacia(
   id: number,
-  dados: DadosProdutoFarmacia
+  dados: Partial<DadosProdutoFarmacia>
 ): Promise<ProdutoFarmacia> {
-  return requisicaoProdutos<ProdutoFarmacia>(
-    `${id}/`,
-    "PATCH",
-    dados
+  const response = await fetch(
+    `${API_URL}/farmacias/produtos/${id}/`,
+    {
+      method: "PATCH",
+      headers: await cabecalhoFarmacia(),
+      body: JSON.stringify(dados),
+    }
   );
+
+  return tratarResposta<ProdutoFarmacia>(response);
 }
+
+// ======================================================
+// 14. EXCLUIR PRODUTO
+// ======================================================
 
 export async function excluirProdutoFarmacia(
   id: number
 ): Promise<void> {
-  await requisicaoProdutos<void>(
-    `${id}/`,
-    "DELETE"
+  const response = await fetch(
+    `${API_URL}/farmacias/produtos/${id}/`,
+    {
+      method: "DELETE",
+      headers: await cabecalhoFarmacia(),
+    }
   );
+
+  await tratarResposta<void>(response);
 }
+
+// ======================================================
+// 15. CATÁLOGO PÚBLICO DE PRODUTOS
+// ======================================================
 
 export async function buscarCatalogoFarmacias(
   busca: string = ""
 ): Promise<ProdutoCatalogo[]> {
-  const parametro = busca.trim()
+  const parametros = busca.trim()
     ? `?busca=${encodeURIComponent(busca.trim())}`
     : "";
 
   const response = await fetch(
-    `${API_URL}/farmacias/catalogo/${parametro}`
+    `${API_URL}/farmacias/catalogo/${parametros}`,
+    {
+      method: "GET",
+    }
   );
 
-  if (!response.ok) {
-    throw new Error(await obterMensagemErro(response));
-  }
-
-  const resultado: RespostaLista<ProdutoCatalogo> =
-    await response.json();
-
-  return extrairLista(resultado);
+  return tratarResposta<ProdutoCatalogo[]>(response);
 }
 
-export async function listarFarmaciasMapa(): Promise<FarmaciaMapa[]> {
+// ======================================================
+// 16. MAPA DE FARMÁCIAS PARCEIRAS
+// ======================================================
+
+export async function buscarFarmaciasMapa():
+  Promise<FarmaciaMapa[]> {
   const response = await fetch(
-    `${API_URL}/farmacias/mapa/`
+    `${API_URL}/farmacias/mapa/`,
+    {
+      method: "GET",
+    }
   );
 
-  if (!response.ok) {
-    throw new Error(await obterMensagemErro(response));
-  }
+  return tratarResposta<FarmaciaMapa[]>(response);
+}
 
-  const resultado: RespostaLista<FarmaciaMapa> =
-    await response.json();
-
-  return extrairLista(resultado);
+// Nome utilizado pela tela farmacias-mapa.tsx
+export async function listarFarmaciasMapa():
+  Promise<FarmaciaMapa[]> {
+  return buscarFarmaciasMapa();
 }

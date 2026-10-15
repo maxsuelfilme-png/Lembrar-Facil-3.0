@@ -10,8 +10,16 @@ export type Cuidador = {
   telefone: string;
 };
 
+// ======================================================
+// ENDPOINT DO FAMILIAR
+// ======================================================
+
 const URL_FAMILIAR =
-  `${API_URL.replace(/\/$/, "")}/pacientes/meu-contato-familiar/`;
+  `${API_URL.replace(/\/$/, "")}/cuidadores/meu-perfil/`;
+
+// ======================================================
+// REQUISIÇÃO AUTENTICADA
+// ======================================================
 
 async function fetchAutenticado(
   url: string,
@@ -21,7 +29,7 @@ async function fetchAutenticado(
 
   if (!token) {
     throw new Error(
-      "Usuário não autenticado. Faça login novamente."
+      "Familiar não autenticado. Faça login novamente."
     );
   }
 
@@ -52,6 +60,10 @@ async function fetchAutenticado(
   return response;
 }
 
+// ======================================================
+// LER ERROS DO BACKEND
+// ======================================================
+
 async function lerErro(response: Response): Promise<string> {
   const texto = await response.text();
 
@@ -76,6 +88,10 @@ async function lerErro(response: Response): Promise<string> {
   }
 }
 
+// ======================================================
+// BUSCAR DADOS DO FAMILIAR
+// ======================================================
+
 export async function buscarMeuCuidador(): Promise<Cuidador> {
   const response = await fetchAutenticado(URL_FAMILIAR, {
     method: "GET",
@@ -95,6 +111,10 @@ export async function buscarMeuCuidador(): Promise<Cuidador> {
   };
 }
 
+// ======================================================
+// ATUALIZAR NOME E WHATSAPP DO FAMILIAR
+// ======================================================
+
 export async function atualizarMeuCuidador(
   nome: string,
   telefone: string
@@ -106,6 +126,7 @@ export async function atualizarMeuCuidador(
     throw new Error("Informe o nome do familiar.");
   }
 
+  // Aceita celular com DDD, com ou sem código 55.
   if (!/^(?:55)?[1-9][0-9]{10}$/.test(telefoneLimpo)) {
     throw new Error(
       "Informe um celular válido com DDD. Ex.: 81999999999."
