@@ -14,6 +14,10 @@ GRAPH_API_VERSION = os.getenv(
 )
 
 
+# ======================================================
+# NORMALIZAR TELEFONE BRASILEIRO
+# ======================================================
+
 def normalizar_telefone(telefone):
     numero = re.sub(r"\D", "", str(telefone or ""))
 
@@ -28,6 +32,10 @@ def normalizar_telefone(telefone):
 
     return numero
 
+
+# ======================================================
+# ENVIAR TEMPLATE PELA META
+# ======================================================
 
 def enviar_template(telefone, nome_template, parametros):
     token = os.getenv("WHATSAPP_TOKEN")
@@ -111,6 +119,10 @@ def enviar_template(telefone, nome_template, parametros):
         return False
 
 
+# ======================================================
+# ALERTA AUTOMÁTICO DE MEDICAMENTO ATRASADO
+# ======================================================
+
 def enviar_whatsapp(medicamento, horario, telefone):
     return enviar_template(
         telefone=telefone,
@@ -121,6 +133,10 @@ def enviar_whatsapp(medicamento, horario, telefone):
         ]
     )
 
+
+# ======================================================
+# ALERTA MANUAL DO BOTÃO SOS
+# ======================================================
 
 def enviar_sos_whatsapp(nome_paciente, telefone):
     return enviar_template(
