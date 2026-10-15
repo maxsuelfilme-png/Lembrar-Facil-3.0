@@ -5,12 +5,20 @@ from rest_framework import generics, serializers, status
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 
 from .models import Paciente
 from .serializers import PacienteSerializer
 
-from cuidadores.models import VinculoCuidadorPaciente
-from whatsapp import enviar_sos_whatsapp, normalizar_telefone
+from cuidadores.models import (
+    Cuidador,
+    VinculoCuidadorPaciente,
+)
+
+from whatsapp import (
+    enviar_sos_whatsapp,
+    normalizar_telefone,
+)
 
 
 # ======================================================
@@ -18,6 +26,18 @@ from whatsapp import enviar_sos_whatsapp, normalizar_telefone
 # ======================================================
 
 def obter_paciente(usuario):
+
+    # Impede que uma conta de familiar crie
+    # automaticamente um perfil de paciente.
+    if Cuidador.objects.filter(
+        usuario=usuario
+    ).exists():
+        raise PermissionDenied(
+            "Esta conta pertence a um familiar. "
+            "Utilize a sessão do idoso para acessar "
+            "os dados do paciente."
+        )
+
     paciente, criado = Paciente.objects.get_or_create(
         usuario=usuario,
         defaults={
@@ -27,6 +47,7 @@ def obter_paciente(usuario):
             )
         },
     )
+
     return paciente
 
 
@@ -48,7 +69,9 @@ class MeuPerfilPacienteView(
 # CONTATO DE EMERGÊNCIA
 # ======================================================
 
-class ContatoFamiliarSerializer(serializers.ModelSerializer):
+class ContatoFamiliarSerializer(
+    serializers.ModelSerializer
+):
     nome = serializers.CharField(
         source="contato_emergencia",
         max_length=150,
@@ -79,6 +102,7 @@ class MeuContatoFamiliarView(
 ):
     serializer_class = ContatoFamiliarSerializer
     permission_classes = [IsAuthenticated]
+
     http_method_names = [
         "get",
         "patch",
@@ -132,7 +156,11 @@ def buscar_telefone_familiar(paciente):
 
 class EnviarSOSView(APIView):
     permission_classes = [IsAuthenticated]
-    http_method_names = ["post", "options"]
+
+    http_method_names = [
+        "post",
+        "options",
+    ]
 
     def post(self, request):
 
