@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 GRAPH_API_VERSION = os.getenv(
     "WHATSAPP_GRAPH_API_VERSION",
-    "v25.0"
+    "v25.0",
 )
 
 
@@ -73,7 +73,7 @@ def enviar_template(telefone, nome_template, parametros):
         "template": {
             "name": nome_template,
             "language": {
-                "code": "pt_BR"
+                "code": "pt_BR",
             },
             "components": [
                 {
@@ -81,13 +81,13 @@ def enviar_template(telefone, nome_template, parametros):
                     "parameters": [
                         {
                             "type": "text",
-                            "text": str(parametro)
+                            "text": str(parametro),
                         }
                         for parametro in parametros
-                    ]
+                    ],
                 }
-            ]
-        }
+            ],
+        },
     }
 
     try:
@@ -95,21 +95,47 @@ def enviar_template(telefone, nome_template, parametros):
             url,
             headers=headers,
             json=dados,
-            timeout=10
+            timeout=10,
         )
 
         if resposta.ok:
             logger.info(
-                "WhatsApp: solicitação aceita pela Meta. Template: %s",
-                nome_template
+                "WhatsApp: solicitação aceita pela Meta. "
+                "Template: %s | HTTP: %s",
+                nome_template,
+                resposta.status_code,
             )
             return True
 
+        # ==============================================
+        # DIAGNÓSTICO DE ERROS DA META
+        # ==============================================
+
+        try:
+            corpo_erro = resposta.json()
+            erro_meta = corpo_erro.get("error", {})
+
+            if not isinstance(erro_meta, dict):
+                erro_meta = {}
+
+        except (ValueError, AttributeError):
+            erro_meta = {}
+
         logger.error(
-            "WhatsApp: envio recusado. Template: %s | HTTP: %s",
+            "WhatsApp recusou template=%s | "
+            "HTTP=%s | "
+            "codigo=%s | "
+            "subcodigo=%s | "
+            "tipo=%s | "
+            "mensagem=%s",
             nome_template,
-            resposta.status_code
+            resposta.status_code,
+            erro_meta.get("code"),
+            erro_meta.get("error_subcode"),
+            erro_meta.get("type"),
+            erro_meta.get("message"),
         )
+
         return False
 
     except requests.RequestException:
@@ -129,8 +155,8 @@ def enviar_whatsapp(medicamento, horario, telefone):
         nome_template="medicamento_atrasado",
         parametros=[
             medicamento,
-            horario
-        ]
+            horario,
+        ],
     )
 
 
@@ -143,6 +169,6 @@ def enviar_sos_whatsapp(nome_paciente, telefone):
         telefone=telefone,
         nome_template="alerta_sos",
         parametros=[
-            nome_paciente
-        ]
+            nome_paciente,
+        ],
     )
