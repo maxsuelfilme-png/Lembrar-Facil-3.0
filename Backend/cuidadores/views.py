@@ -1,13 +1,11 @@
 
 from django.db import transaction
 from django.utils import timezone
-from django.contrib.auth import get_user_model
 
 from rest_framework import generics, viewsets, status
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
 
 from .models import (
     Cuidador,
@@ -43,6 +41,7 @@ class MeuPerfilCuidadorView(
                 )
             },
         )
+
         return cuidador
 
 
@@ -75,6 +74,7 @@ class GerarCodigoVinculoView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+
         paciente = Paciente.objects.filter(
             usuario=request.user
         ).first()
@@ -91,11 +91,14 @@ class GerarCodigoVinculoView(APIView):
             )
 
         with transaction.atomic():
+
+            # Invalida códigos anteriores não utilizados
             CodigoVinculo.objects.filter(
                 paciente=paciente,
                 utilizado=False,
             ).update(utilizado=True)
 
+            # Gera um novo código
             novo_codigo = CodigoVinculo.objects.create(
                 paciente=paciente
             )
@@ -111,18 +114,50 @@ class GerarCodigoVinculoView(APIView):
 
 
 # ======================================================
-# FAMILIAR VINCULA O PACIENTE
+# FAMILIAR VINCULA O IDOSO
 # ======================================================
 
 class VincularPacienteView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+
+        # ==================================================
+        # DIAGNÓSTICO TEMPORÁRIO DA CONTA AUTENTICADA
+        # ==================================================
+
+        eh_paciente = Paciente.objects.filter(
+            usuario=request.user
+        ).exists()
+
+        eh_familiar = Cuidador.objects.filter(
+            usuario=request.user
+        ).exists()
+
+        print(
+            "DIAGNOSTICO VINCULO:",
+            {
+                "usuario_id": request.user.id,
+                "username": request.user.username,
+                "eh_paciente": eh_paciente,
+                "eh_familiar": eh_familiar,
+            },
+            flush=True,
+        )
+
+        # ==================================================
+        # VALIDAR CÓDIGO
+        # ==================================================
+
         codigo = request.data.get("codigo")
 
         if not isinstance(codigo, str) or not codigo.strip():
             return Response(
-                {"detail": "Informe o código de vinculação."},
+                {
+                    "detail": (
+                        "Informe o código de vinculação."
+                    )
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -130,13 +165,17 @@ class VincularPacienteView(APIView):
 
         if len(codigo) != 16:
             return Response(
-                {"detail": "Código inválido ou expirado."},
+                {
+                    "detail": "Código inválido ou expirado."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if Paciente.objects.filter(
-            usuario=request.user
-        ).exists():
+        # ==================================================
+        # IMPEDIR VÍNCULO USANDO CONTA DE PACIENTE
+        # ==================================================
+
+        if eh_paciente:
             return Response(
                 {
                     "detail": (
@@ -147,9 +186,15 @@ class VincularPacienteView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        # ==================================================
+        # VERIFICAR E CONSUMIR CÓDIGO
+        # ==================================================
+
         with transaction.atomic():
+
             codigo_vinculo = (
-                CodigoVinculo.objects.select_for_update()
+                CodigoVinculo.objects
+                .select_for_update()
                 .select_related("paciente")
                 .filter(codigo=codigo)
                 .first()
@@ -161,9 +206,17 @@ class VincularPacienteView(APIView):
                 or codigo_vinculo.expira_em <= timezone.now()
             ):
                 return Response(
-                    {"detail": "Código inválido ou expirado."},
+                    {
+                        "detail": (
+                            "Código inválido ou expirado."
+                        )
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+
+            # ==============================================
+            # OBTER OU CRIAR PERFIL DO FAMILIAR
+            # ==============================================
 
             cuidador, criado = Cuidador.objects.get_or_create(
                 usuario=request.user,
@@ -175,24 +228,42 @@ class VincularPacienteView(APIView):
                 },
             )
 
+            # ==============================================
+            # CRIAR VÍNCULO COM O IDOSO
+            # ==============================================
+
             vinculo, criado = (
                 VinculoCuidadorPaciente.objects.get_or_create(
                     cuidador=cuidador,
                     paciente=codigo_vinculo.paciente,
-                    defaults={"ativo": True},
+                    defaults={
+                        "ativo": True
+                    },
                 )
             )
 
+            # Reativa um vínculo existente, se necessário
             if not vinculo.ativo:
                 vinculo.ativo = True
-                vinculo.save(update_fields=["ativo"])
+                vinculo.save(
+                    update_fields=["ativo"]
+                )
 
+            # Código não pode ser reutilizado
             codigo_vinculo.utilizado = True
-            codigo_vinculo.save(update_fields=["utilizado"])
+            codigo_vinculo.save(
+                update_fields=["utilizado"]
+            )
+
+        # ==================================================
+        # RESPOSTA DE SUCESSO
+        # ==================================================
 
         return Response(
             {
-                "detail": "Familiar vinculado com sucesso!",
+                "detail": (
+                    "Familiar vinculado com sucesso!"
+                ),
                 "paciente_id": codigo_vinculo.paciente_id,
                 "vinculo_id": vinculo.id,
             },
