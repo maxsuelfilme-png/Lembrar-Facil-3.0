@@ -1,4 +1,3 @@
-
 import os
 import re
 import logging
@@ -37,7 +36,12 @@ def normalizar_telefone(telefone):
 # ENVIAR TEMPLATE PELA META
 # ======================================================
 
-def enviar_template(telefone, nome_template, parametros):
+def enviar_template(
+    telefone,
+    nome_template,
+    parametros,
+    nomes_parametros=None,
+):
     token = os.getenv("WHATSAPP_TOKEN")
     phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
 
@@ -55,6 +59,13 @@ def enviar_template(telefone, nome_template, parametros):
         )
         return False
 
+    if nomes_parametros is not None:
+        if len(nomes_parametros) != len(parametros):
+            logger.error(
+                "WhatsApp: quantidade de nomes e parâmetros diferente."
+            )
+            return False
+
     url = (
         f"https://graph.facebook.com/"
         f"{GRAPH_API_VERSION}/"
@@ -65,6 +76,19 @@ def enviar_template(telefone, nome_template, parametros):
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
     }
+
+    parametros_formatados = []
+
+    for indice, parametro in enumerate(parametros):
+        item = {
+            "type": "text",
+            "text": str(parametro),
+        }
+
+        if nomes_parametros is not None:
+            item["parameter_name"] = nomes_parametros[indice]
+
+        parametros_formatados.append(item)
 
     dados = {
         "messaging_product": "whatsapp",
@@ -78,13 +102,7 @@ def enviar_template(telefone, nome_template, parametros):
             "components": [
                 {
                     "type": "body",
-                    "parameters": [
-                        {
-                            "type": "text",
-                            "text": str(parametro),
-                        }
-                        for parametro in parametros
-                    ],
+                    "parameters": parametros_formatados,
                 }
             ],
         },
@@ -101,15 +119,11 @@ def enviar_template(telefone, nome_template, parametros):
         if resposta.ok:
             logger.info(
                 "WhatsApp: solicitação aceita pela Meta. "
-                "Template: %s | HTTP: %s",
+                "Template=%s | HTTP=%s",
                 nome_template,
                 resposta.status_code,
             )
             return True
-
-        # ==============================================
-        # DIAGNÓSTICO DE ERROS DA META
-        # ==============================================
 
         try:
             corpo_erro = resposta.json()
@@ -123,17 +137,16 @@ def enviar_template(telefone, nome_template, parametros):
 
         logger.error(
             "WhatsApp recusou template=%s | "
-            "HTTP=%s | "
-            "codigo=%s | "
-            "subcodigo=%s | "
-            "tipo=%s | "
-            "mensagem=%s",
+            "HTTP=%s | codigo=%s | "
+            "subcodigo=%s | mensagem=%s | detalhes=%s",
             nome_template,
             resposta.status_code,
             erro_meta.get("code"),
             erro_meta.get("error_subcode"),
-            erro_meta.get("type"),
             erro_meta.get("message"),
+            erro_meta.get("error_data", {}).get("details")
+            if isinstance(erro_meta.get("error_data"), dict)
+            else None,
         )
 
         return False
@@ -170,5 +183,8 @@ def enviar_sos_whatsapp(nome_paciente, telefone):
         nome_template="alerta_sos",
         parametros=[
             nome_paciente,
+        ],
+        nomes_parametros=[
+            "nome_paciente",
         ],
     )
