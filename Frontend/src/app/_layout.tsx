@@ -14,7 +14,20 @@ export default function RootLayout() {
           animation: "slide_from_right",
         }}
       >
-        <Stack.Screen name="index" />
+        <Stack.Screen
+          name="index"
+          options={{
+            animation: "none",
+          }}
+        />
+
+        <Stack.Screen
+          name="abertura"
+          options={{
+            animation: "none",
+            gestureEnabled: false,
+          }}
+        />
 
         <Stack.Screen name="login" />
         <Stack.Screen name="idoso" />

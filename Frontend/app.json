@@ -3,18 +3,18 @@
   "expo": {
     "name": "Lembra-Fácil",
     "slug": "mobile",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/lembrafacil-icon.png",
     "scheme": "mobile",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "icon": "./assets/images/lembrafacil-icon.png"
     },
     "android": {
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#F5FFFA",
         "foregroundImage": "./assets/images/lembrafacil-icon.png"
       },
       "predictiveBackGestureEnabled": false,
@@ -33,9 +33,14 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#F5FFFA",
+          "image": "./assets/images/lembrafacil-icon.png",
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#F5FFFA",
+            "image": "./assets/images/lembrafacil-icon.png"
+          }
         }
       ],
       "expo-image",
@@ -50,7 +55,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/lembrafacil-icon.png",
-          "color": "#208AEF",
+          "color": "#16A34A",
           "defaultChannel": "medicamentos"
         }
       ]

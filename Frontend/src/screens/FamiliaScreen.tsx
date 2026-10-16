@@ -48,7 +48,7 @@ export default function FamiliaScreen() {
   const [erro, setErro] = useState("");
 
   // ====================================================
-  // CARREGAR DADOS
+  // CARREGAR DADOS DO FAMILIAR E VÍNCULOS PERMANENTES
   // ====================================================
 
   const carregar = useCallback(async () => {
@@ -82,7 +82,7 @@ export default function FamiliaScreen() {
   );
 
   // ====================================================
-  // SALVAR FAMILIAR
+  // SALVAR DADOS DO FAMILIAR
   // ====================================================
 
   async function salvar() {
@@ -148,7 +148,9 @@ export default function FamiliaScreen() {
 
       Alert.alert(
         "Vínculo realizado! 💚",
-        "Agora você pode acompanhar os medicamentos do idoso."
+        "O familiar foi vinculado ao idoso com sucesso!\n\n" +
+          "O vínculo permanecerá ativo, mesmo depois " +
+          "que o código expirar."
       );
     } catch (e) {
       Alert.alert(
@@ -175,7 +177,7 @@ export default function FamiliaScreen() {
   }
 
   // ====================================================
-  // ABRIR MEDICAMENTOS
+  // ABRIR MEDICAMENTOS DO IDOSO
   // ====================================================
 
   function abrirMedicamentos(id: number) {
@@ -195,6 +197,10 @@ export default function FamiliaScreen() {
       },
     });
   }
+
+  const vinculosAtivos = vinculos.filter(
+    (v) => v.ativo !== false
+  );
 
   // ====================================================
   // INTERFACE
@@ -240,8 +246,9 @@ export default function FamiliaScreen() {
           </Text>
 
           <Text style={styles.subtitulo}>
-            Cuide de quem você ama, acompanhe medicamentos
-            e mantenha seus dados atualizados.
+            Cuide de quem você ama, acompanhe
+            medicamentos e mantenha seus dados
+            atualizados.
           </Text>
 
           {/* DESTAQUE */}
@@ -298,7 +305,9 @@ export default function FamiliaScreen() {
               </Text>
 
               <View style={styles.card}>
-                <Text style={styles.label}>Nome</Text>
+                <Text style={styles.label}>
+                  Nome
+                </Text>
 
                 <TextInput
                   style={styles.input}
@@ -356,8 +365,15 @@ export default function FamiliaScreen() {
                 </Text>
 
                 <Text style={styles.texto}>
-                  Peça ao idoso o código gerado na conta dele.
-                  O código é de uso único e vale por 10 minutos.
+                  Peça ao idoso o código gerado
+                  na conta dele.
+                  {"\n\n"}
+                  O código é de uso único e vale
+                  por 10 minutos.
+                  {"\n\n"}
+                  Após utilizar o código com sucesso,
+                  o vínculo permanecerá ativo,
+                  sem precisar gerar outro código.
                 </Text>
 
                 <TextInput
@@ -405,9 +421,7 @@ export default function FamiliaScreen() {
                 Idosos vinculados
               </Text>
 
-              {vinculos.filter(
-                (v) => v.ativo !== false
-              ).length === 0 ? (
+              {vinculosAtivos.length === 0 ? (
                 <View style={styles.card}>
                   <Text style={styles.texto}>
                     Nenhum idoso vinculado ainda.
@@ -415,37 +429,41 @@ export default function FamiliaScreen() {
                   </Text>
                 </View>
               ) : (
-                vinculos
-                  .filter((v) => v.ativo !== false)
-                  .map((v) => (
-                    <View
-                      key={v.id}
-                      style={styles.pacienteCard}
-                    >
-                      <View style={styles.pacienteLinha}>
-                        <Ionicons
-                          name="person-circle-outline"
-                          size={35}
-                          color="#16A34A"
-                        />
+                vinculosAtivos.map((v) => (
+                  <View
+                    key={v.id}
+                    style={styles.pacienteCard}
+                  >
+                    <View style={styles.pacienteLinha}>
+                      <Ionicons
+                        name="person-circle-outline"
+                        size={35}
+                        color="#16A34A"
+                      />
 
+                      <View style={{ flex: 1 }}>
                         <Text style={styles.pacienteNome}>
                           {pacienteNome(v)}
                         </Text>
-                      </View>
 
-                      <TouchableOpacity
-                        style={styles.botaoAzul}
-                        onPress={() =>
-                          abrirMedicamentos(pacienteId(v))
-                        }
-                      >
-                        <Text style={styles.botaoTexto}>
-                          💊 VER MEDICAMENTOS
+                        <Text style={styles.statusVinculo}>
+                          ● Vínculo ativo
                         </Text>
-                      </TouchableOpacity>
+                      </View>
                     </View>
-                  ))
+
+                    <TouchableOpacity
+                      style={styles.botaoAzul}
+                      onPress={() =>
+                        abrirMedicamentos(pacienteId(v))
+                      }
+                    >
+                      <Text style={styles.botaoTexto}>
+                        💊 VER MEDICAMENTOS
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ))
               )}
 
               {/* ACOMPANHAMENTO */}
@@ -470,7 +488,8 @@ export default function FamiliaScreen() {
                   </Text>
 
                   <Text style={styles.texto}>
-                    Veja horários e confirmações dos medicamentos.
+                    Veja horários e confirmações
+                    dos medicamentos.
                   </Text>
                 </View>
 
@@ -496,7 +515,7 @@ export default function FamiliaScreen() {
                   </Text>
 
                   <Text style={styles.texto}>
-                    Avisos automáticos ainda dependem da
+                    Avisos automáticos dependem da
                     configuração do serviço.
                   </Text>
                 </View>
@@ -509,13 +528,16 @@ export default function FamiliaScreen() {
               </Text>
 
               <Text style={styles.textoSecao}>
-                Encontre farmácias parceiras, consulte
-                medicamentos e acompanhe a reposição.
+                Encontre farmácias parceiras,
+                consulte medicamentos e acompanhe
+                a reposição.
               </Text>
 
               <TouchableOpacity
                 style={styles.opcao}
-                onPress={() => router.push("/farmacias-busca")}
+                onPress={() =>
+                  router.push("/farmacias-busca")
+                }
               >
                 <Ionicons
                   name="search-outline"
@@ -529,7 +551,8 @@ export default function FamiliaScreen() {
                   </Text>
 
                   <Text style={styles.texto}>
-                    Pesquise medicamentos e compare preços.
+                    Pesquise medicamentos e
+                    compare preços.
                   </Text>
                 </View>
 
@@ -542,7 +565,9 @@ export default function FamiliaScreen() {
 
               <TouchableOpacity
                 style={styles.opcao}
-                onPress={() => router.push("/farmacias-mapa")}
+                onPress={() =>
+                  router.push("/farmacias-mapa")
+                }
               >
                 <Ionicons
                   name="map-outline"
@@ -600,7 +625,9 @@ export default function FamiliaScreen() {
 
               <View style={styles.rodape}>
                 <Text style={styles.rodapeTexto}>
-                  🛡️ Cuidado e segurança 💚 Sempre por perto
+                  🛡️ Cuidado e segurança 💚
+                  {"\n"}
+                  Sempre por perto
                 </Text>
               </View>
             </>
@@ -796,6 +823,13 @@ const styles = StyleSheet.create({
     color: "#0F2557",
     fontSize: 18,
     fontWeight: "800",
+  },
+
+  statusVinculo: {
+    color: "#16A34A",
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 5,
   },
 
   opcao: {

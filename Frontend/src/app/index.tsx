@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 import {
   Image,
@@ -19,6 +19,8 @@ import {
 
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import AberturaScreen from "../screens/AberturaScreen";
 
 // =====================================================
 // CORES DO LEMBRAFÁCIL
@@ -128,11 +130,7 @@ function CartaoPerfil({
         { backgroundColor: fundo },
       ]}
     >
-      {/* ÁREA PRINCIPAL */}
-
       <View style={styles.cartaoPrincipal}>
-        {/* IMAGEM 3D */}
-
         <View
           style={[
             styles.areaImagem,
@@ -155,8 +153,6 @@ function CartaoPerfil({
             resizeMode="contain"
           />
         </View>
-
-        {/* TEXTO E ÍCONE */}
 
         <View style={styles.infoPerfil}>
           <View
@@ -189,8 +185,6 @@ function CartaoPerfil({
           </Text>
         </View>
 
-        {/* SETA */}
-
         <View
           style={[
             styles.seta,
@@ -204,8 +198,6 @@ function CartaoPerfil({
           />
         </View>
       </View>
-
-      {/* FAIXA DE FUNCIONALIDADES */}
 
       <View
         style={[
@@ -233,6 +225,30 @@ function CartaoPerfil({
 export default function Inicio() {
   const router = useRouter();
 
+  // ===================================================
+  // CONTROLE DA TELA DE ABERTURA
+  // ===================================================
+
+  const [mostrandoAbertura, setMostrandoAbertura] =
+    useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMostrandoAbertura(false);
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Mostra a abertura antes da tela principal.
+  if (mostrandoAbertura) {
+    return <AberturaScreen />;
+  }
+
+  // ===================================================
+  // INTERFACE PRINCIPAL
+  // ===================================================
+
   return (
     <SafeAreaView
       style={styles.container}
@@ -242,15 +258,11 @@ export default function Inicio() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* ============================================
-            CABEÇALHO
-        ============================================ */}
+        {/* CABEÇALHO */}
 
         <View style={styles.header}>
           <View style={styles.circuloDecorativo1} />
           <View style={styles.circuloDecorativo2} />
-
-          {/* LOGOTIPO */}
 
           <View style={styles.logoContainer}>
             <Ionicons
@@ -267,12 +279,11 @@ export default function Inicio() {
             />
           </View>
 
-          {/* NOME DO APLICATIVO */}
-
           <Text style={styles.logoNome}>
             <Text style={styles.logoNomeEscuro}>
               Lembra
             </Text>
+
             <Text style={styles.logoNomeAzul}>
               Fácil
             </Text>
@@ -289,9 +300,7 @@ export default function Inicio() {
           </View>
         </View>
 
-        {/* ============================================
-            INTRODUÇÃO
-        ============================================ */}
+        {/* INTRODUÇÃO */}
 
         <View style={styles.introducao}>
           <Text style={styles.tituloPrincipal}>
@@ -303,9 +312,7 @@ export default function Inicio() {
           </Text>
         </View>
 
-        {/* ============================================
-            SOU IDOSO
-        ============================================ */}
+        {/* SOU IDOSO */}
 
         <CartaoPerfil
           titulo="Sou Idoso"
@@ -332,9 +339,7 @@ export default function Inicio() {
           ]}
         />
 
-        {/* ============================================
-            SOU FAMILIAR
-        ============================================ */}
+        {/* SOU FAMILIAR */}
 
         <CartaoPerfil
           titulo="Sou Familiar"
@@ -361,9 +366,7 @@ export default function Inicio() {
           ]}
         />
 
-        {/* ============================================
-            SOU FARMÁCIA
-        ============================================ */}
+        {/* SOU FARMÁCIA */}
 
         <CartaoPerfil
           titulo="Sou Farmácia"
@@ -390,9 +393,7 @@ export default function Inicio() {
           ]}
         />
 
-        {/* ============================================
-            SEGURANÇA
-        ============================================ */}
+        {/* SEGURANÇA */}
 
         <View style={styles.seguranca}>
           <View style={styles.escudoContainer}>
@@ -409,7 +410,8 @@ export default function Inicio() {
             </Text>
 
             <Text style={styles.segurancaDescricao}>
-              Utilizamos autenticação segura para proteger suas informações.
+              Utilizamos autenticação segura para
+              proteger suas informações.
             </Text>
           </View>
 
@@ -435,8 +437,6 @@ export default function Inicio() {
 // =====================================================
 
 const styles = StyleSheet.create({
-  // TELA
-
   container: {
     flex: 1,
     backgroundColor: CORES.fundo,
@@ -446,8 +446,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 24,
   },
-
-  // CABEÇALHO
 
   header: {
     alignItems: "center",
@@ -529,8 +527,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  // INTRODUÇÃO
-
   introducao: {
     alignItems: "center",
     marginTop: 12,
@@ -552,8 +548,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 3,
   },
-
-  // CARTÕES COMPACTOS
 
   cartao: {
     borderRadius: 22,
@@ -642,8 +636,6 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
 
-  // FUNCIONALIDADES
-
   faixaBeneficios: {
     flexDirection: "row",
     borderRadius: 15,
@@ -668,8 +660,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 3,
   },
-
-  // SEGURANÇA
 
   seguranca: {
     flexDirection: "row",
@@ -700,8 +690,6 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginTop: 3,
   },
-
-  // RODAPÉ
 
   rodape: {
     color: "#9BAABD",
