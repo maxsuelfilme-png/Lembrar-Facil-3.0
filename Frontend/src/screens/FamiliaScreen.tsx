@@ -29,9 +29,14 @@ import {
   type VinculoPaciente,
 } from "../services/vinculosService";
 
-// ======================================================
-// TELA FAMÍLIA - LEMBRAFÁCIL
-// ======================================================
+const CORES = {
+  fundo: "#F8FBFF",
+  azul: "#2563EB",
+  azulEscuro: "#0F2557",
+  verde: "#16A34A",
+  texto: "#64748B",
+  branco: "#FFFFFF",
+};
 
 export default function FamiliaScreen() {
   const router = useRouter();
@@ -46,10 +51,6 @@ export default function FamiliaScreen() {
   const [salvando, setSalvando] = useState(false);
   const [vinculando, setVinculando] = useState(false);
   const [erro, setErro] = useState("");
-
-  // ====================================================
-  // CARREGAR DADOS DO FAMILIAR E VÍNCULOS PERMANENTES
-  // ====================================================
 
   const carregar = useCallback(async () => {
     try {
@@ -80,10 +81,6 @@ export default function FamiliaScreen() {
       void carregar();
     }, [carregar])
   );
-
-  // ====================================================
-  // SALVAR DADOS DO FAMILIAR
-  // ====================================================
 
   async function salvar() {
     if (!nome.trim() || !telefone.trim()) {
@@ -121,10 +118,6 @@ export default function FamiliaScreen() {
     }
   }
 
-  // ====================================================
-  // VINCULAR IDOSO
-  // ====================================================
-
   async function confirmarVinculo() {
     const codigoLimpo = codigo.trim().toUpperCase();
 
@@ -149,7 +142,7 @@ export default function FamiliaScreen() {
       Alert.alert(
         "Vínculo realizado! 💚",
         "O familiar foi vinculado ao idoso com sucesso!\n\n" +
-          "O vínculo permanecerá ativo, mesmo depois " +
+          "O vínculo permanecerá ativo mesmo depois " +
           "que o código expirar."
       );
     } catch (e) {
@@ -164,21 +157,19 @@ export default function FamiliaScreen() {
     }
   }
 
-  // ====================================================
-  // IDENTIFICAR IDOSO
-  // ====================================================
-
-  function pacienteId(v: VinculoPaciente): number {
-    return v.paciente;
-  }
-
   function pacienteNome(v: VinculoPaciente): string {
-    return v.paciente_nome || `Paciente #${v.paciente}`;
-  }
+    const nomePaciente = (v.paciente_nome || "").trim();
 
-  // ====================================================
-  // ABRIR MEDICAMENTOS DO IDOSO
-  // ====================================================
+    if (
+      nomePaciente &&
+      nomePaciente.toLowerCase() !== "paciente" &&
+      nomePaciente.toLowerCase() !== "paciente não informado"
+    ) {
+      return nomePaciente;
+    }
+
+    return `Idoso #${v.paciente}`;
+  }
 
   function abrirMedicamentos(id: number) {
     if (!Number.isInteger(id) || id <= 0) {
@@ -202,10 +193,6 @@ export default function FamiliaScreen() {
     (v) => v.ativo !== false
   );
 
-  // ====================================================
-  // INTERFACE
-  // ====================================================
-
   return (
     <SafeAreaView
       style={styles.container}
@@ -213,17 +200,13 @@ export default function FamiliaScreen() {
     >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={
-          Platform.OS === "ios" ? "padding" : undefined
-        }
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* VOLTAR */}
-
           <TouchableOpacity
             style={styles.voltar}
             onPress={() => router.back()}
@@ -231,40 +214,31 @@ export default function FamiliaScreen() {
             <Ionicons
               name="chevron-back"
               size={24}
-              color="#2563EB"
+              color={CORES.azul}
             />
-
-            <Text style={styles.voltarTexto}>
-              Voltar
-            </Text>
+            <Text style={styles.voltarTexto}>Voltar</Text>
           </TouchableOpacity>
-
-          {/* CABEÇALHO */}
 
           <Text style={styles.titulo}>
             Área da família 💚
           </Text>
 
           <Text style={styles.subtitulo}>
-            Cuide de quem você ama, acompanhe
-            medicamentos e mantenha seus dados
-            atualizados.
+            Cuide de quem você ama, acompanhe medicamentos
+            e mantenha seus dados atualizados.
           </Text>
-
-          {/* DESTAQUE */}
 
           <View style={styles.hero}>
             <MaterialCommunityIcons
               name="account-heart"
               size={43}
-              color="#16A34A"
+              color={CORES.verde}
             />
 
             <View style={{ flex: 1 }}>
               <Text style={styles.heroTitulo}>
                 Cuidando de quem você ama
               </Text>
-
               <Text style={styles.texto}>
                 Compartilhe a rotina de medicamentos
                 com segurança.
@@ -275,13 +249,11 @@ export default function FamiliaScreen() {
           {carregando ? (
             <ActivityIndicator
               size="large"
-              color="#16A34A"
+              color={CORES.verde}
               style={{ marginVertical: 28 }}
             />
           ) : (
             <>
-              {/* ERRO */}
-
               {!!erro && (
                 <View style={styles.aviso}>
                   <Text style={styles.avisoTexto}>
@@ -298,16 +270,12 @@ export default function FamiliaScreen() {
                 </View>
               )}
 
-              {/* FAMILIAR */}
-
               <Text style={styles.secao}>
                 Familiar responsável
               </Text>
 
               <View style={styles.card}>
-                <Text style={styles.label}>
-                  Nome
-                </Text>
+                <Text style={styles.label}>Nome</Text>
 
                 <TextInput
                   style={styles.input}
@@ -352,8 +320,6 @@ export default function FamiliaScreen() {
                   )}
                 </TouchableOpacity>
               </View>
-
-              {/* VINCULAR IDOSO */}
 
               <Text style={styles.secao}>
                 Vincular um idoso
@@ -415,8 +381,6 @@ export default function FamiliaScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* IDOSOS VINCULADOS */}
-
               <Text style={styles.secao}>
                 Idosos vinculados
               </Text>
@@ -438,7 +402,7 @@ export default function FamiliaScreen() {
                       <Ionicons
                         name="person-circle-outline"
                         size={35}
-                        color="#16A34A"
+                        color={CORES.verde}
                       />
 
                       <View style={{ flex: 1 }}>
@@ -455,7 +419,7 @@ export default function FamiliaScreen() {
                     <TouchableOpacity
                       style={styles.botaoAzul}
                       onPress={() =>
-                        abrirMedicamentos(pacienteId(v))
+                        abrirMedicamentos(v.paciente)
                       }
                     >
                       <Text style={styles.botaoTexto}>
@@ -465,8 +429,6 @@ export default function FamiliaScreen() {
                   </View>
                 ))
               )}
-
-              {/* ACOMPANHAMENTO */}
 
               <Text style={styles.secao}>
                 Acompanhamento
@@ -479,14 +441,13 @@ export default function FamiliaScreen() {
                 <Ionicons
                   name="calendar-outline"
                   size={30}
-                  color="#2563EB"
+                  color={CORES.azul}
                 />
 
                 <View style={styles.opcaoConteudo}>
                   <Text style={styles.cardTitulo}>
                     Rotina de hoje
                   </Text>
-
                   <Text style={styles.texto}>
                     Veja horários e confirmações
                     dos medicamentos.
@@ -496,11 +457,9 @@ export default function FamiliaScreen() {
                 <Ionicons
                   name="chevron-forward"
                   size={23}
-                  color="#2563EB"
+                  color={CORES.azul}
                 />
               </TouchableOpacity>
-
-              {/* ALERTAS */}
 
               <View style={styles.opcao}>
                 <Ionicons
@@ -513,15 +472,12 @@ export default function FamiliaScreen() {
                   <Text style={styles.cardTitulo}>
                     Alertas
                   </Text>
-
                   <Text style={styles.texto}>
                     Avisos automáticos dependem da
                     configuração do serviço.
                   </Text>
                 </View>
               </View>
-
-              {/* FARMÁCIAS */}
 
               <Text style={styles.secao}>
                 Farmácias e medicamentos
@@ -535,39 +491,33 @@ export default function FamiliaScreen() {
 
               <TouchableOpacity
                 style={styles.opcao}
-                onPress={() =>
-                  router.push("/farmacias-busca")
-                }
+                onPress={() => router.push("/farmacias-busca")}
               >
                 <Ionicons
                   name="search-outline"
                   size={31}
-                  color="#2563EB"
+                  color={CORES.azul}
                 />
 
                 <View style={styles.opcaoConteudo}>
                   <Text style={styles.cardTitulo}>
                     Encontrar farmácias
                   </Text>
-
                   <Text style={styles.texto}>
-                    Pesquise medicamentos e
-                    compare preços.
+                    Pesquise medicamentos e compare preços.
                   </Text>
                 </View>
 
                 <Ionicons
                   name="chevron-forward"
                   size={23}
-                  color="#2563EB"
+                  color={CORES.azul}
                 />
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.opcao}
-                onPress={() =>
-                  router.push("/farmacias-mapa")
-                }
+                onPress={() => router.push("/farmacias-mapa")}
               >
                 <Ionicons
                   name="map-outline"
@@ -579,7 +529,6 @@ export default function FamiliaScreen() {
                   <Text style={styles.cardTitulo}>
                     Ver farmácias no mapa
                   </Text>
-
                   <Text style={styles.texto}>
                     Localize farmácias parceiras.
                   </Text>
@@ -608,7 +557,6 @@ export default function FamiliaScreen() {
                   <Text style={styles.cardTitulo}>
                     Reposição de medicamentos
                   </Text>
-
                   <Text style={styles.texto}>
                     Acompanhe estoque e solicitações.
                   </Text>
@@ -620,8 +568,6 @@ export default function FamiliaScreen() {
                   color="#D97706"
                 />
               </TouchableOpacity>
-
-              {/* RODAPÉ */}
 
               <View style={styles.rodape}>
                 <Text style={styles.rodapeTexto}>
@@ -638,14 +584,10 @@ export default function FamiliaScreen() {
   );
 }
 
-// ======================================================
-// ESTILOS
-// ======================================================
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FBFF",
+    backgroundColor: CORES.fundo,
   },
 
   content: {
@@ -661,19 +603,19 @@ const styles = StyleSheet.create({
   },
 
   voltarTexto: {
-    color: "#2563EB",
+    color: CORES.azul,
     fontSize: 16,
     fontWeight: "800",
   },
 
   titulo: {
-    color: "#0F2557",
+    color: CORES.azulEscuro,
     fontSize: 31,
     fontWeight: "900",
   },
 
   subtitulo: {
-    color: "#64748B",
+    color: CORES.texto,
     fontSize: 15,
     lineHeight: 22,
     marginTop: 7,
@@ -691,14 +633,14 @@ const styles = StyleSheet.create({
   },
 
   heroTitulo: {
-    color: "#0F2557",
+    color: CORES.azulEscuro,
     fontSize: 20,
     fontWeight: "900",
     marginBottom: 5,
   },
 
   secao: {
-    color: "#0F2557",
+    color: CORES.azulEscuro,
     fontSize: 22,
     fontWeight: "900",
     marginTop: 8,
@@ -706,7 +648,7 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: "#FFF",
+    backgroundColor: CORES.branco,
     borderRadius: 22,
     padding: 18,
     marginBottom: 22,
@@ -714,7 +656,7 @@ const styles = StyleSheet.create({
   },
 
   cardTitulo: {
-    color: "#0F2557",
+    color: CORES.azulEscuro,
     fontSize: 18,
     fontWeight: "800",
     marginBottom: 5,
@@ -741,20 +683,20 @@ const styles = StyleSheet.create({
   },
 
   texto: {
-    color: "#64748B",
+    color: CORES.texto,
     fontSize: 14,
     lineHeight: 20,
   },
 
   textoSecao: {
-    color: "#64748B",
+    color: CORES.texto,
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 14,
   },
 
   ajuda: {
-    color: "#64748B",
+    color: CORES.texto,
     fontSize: 12,
     marginVertical: 8,
   },
@@ -762,7 +704,7 @@ const styles = StyleSheet.create({
   botaoVerde: {
     minHeight: 55,
     borderRadius: 16,
-    backgroundColor: "#16A34A",
+    backgroundColor: CORES.verde,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 10,
@@ -771,14 +713,14 @@ const styles = StyleSheet.create({
   botaoAzul: {
     minHeight: 52,
     borderRadius: 16,
-    backgroundColor: "#2563EB",
+    backgroundColor: CORES.azul,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 12,
   },
 
   botaoTexto: {
-    color: "#FFF",
+    color: CORES.branco,
     fontSize: 15,
     fontWeight: "900",
   },
@@ -800,13 +742,13 @@ const styles = StyleSheet.create({
   },
 
   link: {
-    color: "#2563EB",
+    color: CORES.azul,
     fontWeight: "800",
     marginTop: 8,
   },
 
   pacienteCard: {
-    backgroundColor: "#FFF",
+    backgroundColor: CORES.branco,
     borderRadius: 20,
     padding: 17,
     marginBottom: 13,
@@ -820,20 +762,20 @@ const styles = StyleSheet.create({
   },
 
   pacienteNome: {
-    color: "#0F2557",
+    color: CORES.azulEscuro,
     fontSize: 18,
     fontWeight: "800",
   },
 
   statusVinculo: {
-    color: "#16A34A",
+    color: CORES.verde,
     fontSize: 13,
     fontWeight: "700",
     marginTop: 5,
   },
 
   opcao: {
-    backgroundColor: "#FFF",
+    backgroundColor: CORES.branco,
     borderRadius: 20,
     padding: 17,
     flexDirection: "row",

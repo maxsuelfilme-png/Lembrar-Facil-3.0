@@ -21,39 +21,28 @@ from whatsapp import (
 )
 
 
-# ======================================================
-# OBTER PACIENTE
-# ======================================================
-
 def obter_paciente(usuario):
-
-    # Impede que uma conta de familiar crie
-    # automaticamente um perfil de paciente.
-    if Cuidador.objects.filter(
-        usuario=usuario
-    ).exists():
+    if Cuidador.objects.filter(usuario=usuario).exists():
         raise PermissionDenied(
             "Esta conta pertence a um familiar. "
             "Utilize a sessão do idoso para acessar "
             "os dados do paciente."
         )
 
+    nome_completo = usuario.get_full_name().strip()
+    nome_usuario = usuario.username.strip()
+
+    nome_inicial = nome_completo or nome_usuario
+
     paciente, criado = Paciente.objects.get_or_create(
         usuario=usuario,
         defaults={
-            "nome": (
-                usuario.get_full_name()
-                or usuario.username
-            )
+            "nome": nome_inicial
         },
     )
 
     return paciente
 
-
-# ======================================================
-# PERFIL DO PACIENTE
-# ======================================================
 
 class MeuPerfilPacienteView(
     generics.RetrieveUpdateAPIView
@@ -65,13 +54,7 @@ class MeuPerfilPacienteView(
         return obter_paciente(self.request.user)
 
 
-# ======================================================
-# CONTATO DE EMERGÊNCIA
-# ======================================================
-
-class ContatoFamiliarSerializer(
-    serializers.ModelSerializer
-):
+class ContatoFamiliarSerializer(serializers.ModelSerializer):
     nome = serializers.CharField(
         source="contato_emergencia",
         max_length=150,
@@ -84,7 +67,10 @@ class ContatoFamiliarSerializer(
 
     class Meta:
         model = Paciente
-        fields = ["nome", "telefone"]
+        fields = [
+            "nome",
+            "telefone",
+        ]
 
     def validate_telefone(self, value):
         numero = normalizar_telefone(value)
@@ -114,13 +100,7 @@ class MeuContatoFamiliarView(
         return obter_paciente(self.request.user)
 
 
-# ======================================================
-# LOCALIZAR WHATSAPP DO FAMILIAR
-# ======================================================
-
 def buscar_telefone_familiar(paciente):
-
-    # Primeiro: familiar vinculado ao paciente.
     vinculos = (
         VinculoCuidadorPaciente.objects
         .filter(
@@ -139,7 +119,6 @@ def buscar_telefone_familiar(paciente):
         if telefone:
             return telefone
 
-    # Segundo: contato de emergência do paciente.
     telefone = normalizar_telefone(
         paciente.telefone_emergencia
     )
@@ -150,10 +129,6 @@ def buscar_telefone_familiar(paciente):
     return None
 
 
-# ======================================================
-# ENVIAR ALERTA SOS
-# ======================================================
-
 class EnviarSOSView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -163,8 +138,6 @@ class EnviarSOSView(APIView):
     ]
 
     def post(self, request):
-
-        # Exige um paciente associado à conta.
         paciente = Paciente.objects.filter(
             usuario=request.user
         ).first()
@@ -180,7 +153,6 @@ class EnviarSOSView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # Procura o WhatsApp do familiar.
         telefone = buscar_telefone_familiar(paciente)
 
         if not telefone:
@@ -196,7 +168,6 @@ class EnviarSOSView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Evita solicitações repetidas em sequência.
         chave = f"lembrafacil:sos:{request.user.pk}"
 
         if not cache.add(

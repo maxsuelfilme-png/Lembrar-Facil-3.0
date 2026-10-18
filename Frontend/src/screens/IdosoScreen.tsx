@@ -1,8 +1,10 @@
 
 import React, { useEffect, useRef, useState } from "react";
+
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
@@ -13,10 +15,7 @@ import {
 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import {
-  Ionicons,
-  MaterialCommunityIcons,
-} from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 import {
   API_URL,
@@ -26,15 +25,18 @@ import {
   limparSessaoAntigaIdoso,
 } from "../services/authService";
 
-import {
-  gerarCodigoVinculoIdoso,
-} from "../services/vinculosService";
+import { gerarCodigoVinculoIdoso } from "../services/vinculosService";
+
+const API_BASE = API_URL.replace(/\/+$/, "");
 
 export default function IdosoScreen() {
   const router = useRouter();
 
   const [preparando, setPreparando] = useState(true);
   const [erroSessao, setErroSessao] = useState<string | null>(null);
+
+  const [nomeIdoso, setNomeIdoso] = useState("");
+  const [salvandoNome, setSalvandoNome] = useState(false);
 
   const [gerandoCodigo, setGerandoCodigo] = useState(false);
   const [codigoVinculo, setCodigoVinculo] = useState("");
@@ -43,9 +45,102 @@ export default function IdosoScreen() {
   const [enviandoSOS, setEnviandoSOS] = useState(false);
   const enviandoSOSRef = useRef(false);
 
-  // ======================================================
-  // PREPARAR SESSÃO DO IDOSO
-  // ======================================================
+  // PERFIL DO IDOSO
+
+  async function carregarNomeIdoso() {
+    const token = await obterTokenValidoIdoso();
+
+    if (!token) {
+      throw new Error("Sessão do idoso indisponível.");
+    }
+
+    const resposta = await fetch(
+      `${API_BASE}/pacientes/meu-perfil/`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const dados = await resposta.json().catch(() => null);
+
+    if (!resposta.ok) {
+      throw new Error(
+        dados?.detail || "Não foi possível carregar o perfil."
+      );
+    }
+
+    setNomeIdoso(dados?.nome || "");
+  }
+
+  async function salvarNomeIdoso() {
+    const nomeLimpo = nomeIdoso.trim().replace(/\s+/g, " ");
+
+    if (
+      !nomeLimpo ||
+      nomeLimpo.toLowerCase() === "paciente"
+    ) {
+      Alert.alert(
+        "Nome inválido",
+        "Informe o nome verdadeiro do idoso."
+      );
+      return;
+    }
+
+    try {
+      setSalvandoNome(true);
+
+      const token = await obterTokenValidoIdoso();
+
+      if (!token) {
+        throw new Error("Sessão do idoso indisponível.");
+      }
+
+      const resposta = await fetch(
+        `${API_BASE}/pacientes/meu-perfil/`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            nome: nomeLimpo,
+          }),
+        }
+      );
+
+      const dados = await resposta.json().catch(() => null);
+
+      if (!resposta.ok) {
+        const detalhe =
+          dados?.nome?.[0] ||
+          dados?.detail ||
+          "Não foi possível salvar o nome.";
+
+        throw new Error(String(detalhe));
+      }
+
+      setNomeIdoso(dados?.nome || nomeLimpo);
+
+      Alert.alert(
+        "Perfil atualizado 💚",
+        "O nome do idoso foi salvo com sucesso."
+      );
+    } catch (erro) {
+      Alert.alert(
+        "Erro",
+        erro instanceof Error
+          ? erro.message
+          : "Não foi possível salvar o nome."
+      );
+    } finally {
+      setSalvandoNome(false);
+    }
+  }
+
+  // SESSÃO DO IDOSO
 
   async function prepararSessao() {
     try {
@@ -54,15 +149,16 @@ export default function IdosoScreen() {
 
       await diagnosticarSessaoIdoso();
       await iniciarSessaoIdoso();
+      await carregarNomeIdoso();
 
-      console.log("Sessão do idoso iniciada com sucesso.");
+      console.log("Sessão do idoso iniciada.");
     } catch (erro) {
       const mensagem =
         erro instanceof Error
           ? erro.message
           : "Não foi possível conectar ao servidor.";
 
-      console.error("Erro na sessão do idoso:", mensagem);
+      console.error("Erro na sessão:", mensagem);
       setErroSessao(mensagem);
     } finally {
       setPreparando(false);
@@ -73,16 +169,17 @@ export default function IdosoScreen() {
     void prepararSessao();
   }, []);
 
-  // ======================================================
-  // REINICIAR CADASTRO ANTIGO DE TESTE
-  // ======================================================
+  // REINICIAR CADASTRO DE TESTE
 
   function confirmarReinicioTeste() {
     Alert.alert(
       "Reiniciar cadastro de teste",
       "Use somente se o paciente antigo foi excluído do Railway. Isso remove a sessão local e cria um novo paciente.",
       [
-        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
         {
           text: "Reiniciar teste",
           style: "destructive",
@@ -92,6 +189,7 @@ export default function IdosoScreen() {
                 setPreparando(true);
                 setCodigoVinculo("");
                 setExpiracaoCodigo("");
+                setNomeIdoso("");
 
                 await limparSessaoAntigaIdoso();
                 await prepararSessao();
@@ -111,9 +209,7 @@ export default function IdosoScreen() {
     );
   }
 
-  // ======================================================
   // GERAR CÓDIGO DE VÍNCULO
-  // ======================================================
 
   async function gerarCodigo() {
     if (preparando || gerandoCodigo || erroSessao) {
@@ -128,31 +224,25 @@ export default function IdosoScreen() {
       const resposta = await gerarCodigoVinculoIdoso();
 
       setCodigoVinculo(resposta.codigo);
-
-      if (resposta.expira_em) {
-        setExpiracaoCodigo(resposta.expira_em);
-      }
+      setExpiracaoCodigo(resposta.expira_em || "");
 
       Alert.alert(
         "Código gerado! 💚",
-        "Informe esse código na tela Família, na opção VINCULAR IDOSO. O código é válido por 10 minutos."
+        "Informe esse código na tela Família. Ele é válido por 10 minutos. O vínculo criado será permanente."
       );
     } catch (erro) {
-      const mensagem =
+      Alert.alert(
+        "Erro ao gerar código",
         erro instanceof Error
           ? erro.message
-          : "Não foi possível gerar o código.";
-
-      console.error("Erro ao gerar vínculo:", mensagem);
-      Alert.alert("Erro ao gerar código", mensagem);
+          : "Não foi possível gerar o código."
+      );
     } finally {
       setGerandoCodigo(false);
     }
   }
 
-  // ======================================================
   // NAVEGAÇÃO
-  // ======================================================
 
   function abrirArea(
     destino: "/receita" | "/medicamentos" | "/rotina"
@@ -168,7 +258,9 @@ export default function IdosoScreen() {
     if (destino === "/medicamentos") {
       router.push({
         pathname: "/medicamentos",
-        params: { perfil: "idoso" },
+        params: {
+          perfil: "idoso",
+        },
       });
       return;
     }
@@ -176,12 +268,12 @@ export default function IdosoScreen() {
     router.push(destino);
   }
 
-  // ======================================================
-  // ENVIAR SOS PELO BACKEND
-  // ======================================================
+  // SOS VIA WHATSAPP
 
   async function enviarSOSWhatsApp() {
-    if (enviandoSOSRef.current) return;
+    if (enviandoSOSRef.current) {
+      return;
+    }
 
     enviandoSOSRef.current = true;
     setEnviandoSOS(true);
@@ -199,45 +291,38 @@ export default function IdosoScreen() {
         );
       }
 
-      const url =
-        `${API_URL.replace(/\/+$/, "")}/pacientes/sos/`;
+      const resposta = await fetch(
+        `${API_BASE}/pacientes/sos/`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const resultado = await response
+      const resultado = await resposta
         .json()
         .catch(() => null);
 
-      if (!response.ok) {
+      if (!resposta.ok) {
         throw new Error(
           resultado?.detail ||
-            `Não foi possível solicitar o SOS. Erro HTTP ${response.status}.`
+            `Erro HTTP ${resposta.status} ao solicitar SOS.`
         );
       }
-
-      console.log(
-        "SOS: solicitação aceita pelo backend.",
-        resultado?.detail || ""
-      );
 
       Alert.alert(
         "SOS solicitado",
         resultado?.detail ||
-          "O pedido de ajuda foi enviado ao servidor. A entrega da mensagem ainda não foi confirmada."
+          "O pedido foi aceito pelo servidor. A entrega da mensagem ainda não foi confirmada."
       );
     } catch (erro) {
       const mensagem =
         erro instanceof Error
           ? erro.message
           : "Não foi possível solicitar o SOS.";
-
-      console.error("Erro ao solicitar SOS:", mensagem);
 
       Alert.alert(
         "Não foi possível enviar o SOS",
@@ -249,16 +334,12 @@ export default function IdosoScreen() {
     }
   }
 
-  // ======================================================
-  // ABRIR DISCADOR DO SAMU
-  // ======================================================
+  // SAMU
 
   async function ligarSAMU() {
     try {
       await Linking.openURL("tel:192");
-    } catch (erro) {
-      console.error("Erro ao abrir o telefone:", erro);
-
+    } catch {
       Alert.alert(
         "SAMU - 192",
         "Não foi possível abrir o discador. Ligue para 192 manualmente."
@@ -266,16 +347,15 @@ export default function IdosoScreen() {
     }
   }
 
-  // ======================================================
-  // CONFIRMAR SOS
-  // ======================================================
-
   function confirmarSOS() {
     Alert.alert(
       "🚨 SOS - Emergência",
       "Deseja avisar seu familiar pelo WhatsApp e abrir a ligação para o SAMU (192)?",
       [
-        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
         {
           text: "SIM, PRECISO DE AJUDA",
           onPress: () => {
@@ -287,17 +367,16 @@ export default function IdosoScreen() {
     );
   }
 
-  // ======================================================
-  // INTERFACE
-  // ======================================================
+  const bloqueado = preparando || !!erroSessao;
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* BARRA SUPERIOR */}
+        {/* CABEÇALHO */}
 
         <View style={styles.topBar}>
           <TouchableOpacity
@@ -312,16 +391,12 @@ export default function IdosoScreen() {
             <Text style={styles.voltar}>Voltar</Text>
           </TouchableOpacity>
 
-          <View style={styles.settingsButton}>
-            <Ionicons
-              name="settings-outline"
-              size={26}
-              color="#64748B"
-            />
-          </View>
+          <Ionicons
+            name="settings-outline"
+            size={26}
+            color="#64748B"
+          />
         </View>
-
-        {/* BOAS-VINDAS */}
 
         <View style={styles.welcome}>
           <Text style={styles.title}>Olá! 👋</Text>
@@ -330,7 +405,7 @@ export default function IdosoScreen() {
           </Text>
         </View>
 
-        {/* CARREGANDO */}
+        {/* CARREGAMENTO */}
 
         {preparando && (
           <View style={styles.statusBox}>
@@ -344,9 +419,9 @@ export default function IdosoScreen() {
           </View>
         )}
 
-        {/* ERRO DA SESSÃO */}
+        {/* ERRO */}
 
-        {erroSessao && (
+        {!!erroSessao && (
           <View style={styles.erroBox}>
             <Ionicons
               name="alert-circle-outline"
@@ -372,12 +447,7 @@ export default function IdosoScreen() {
               onPress={confirmarReinicioTeste}
               disabled={preparando}
             >
-              <Ionicons
-                name="refresh-circle-outline"
-                size={22}
-                color="#FFFFFF"
-              />
-              <Text style={styles.reiniciarTexto}>
+              <Text style={styles.botaoTexto}>
                 Reiniciar cadastro de teste
               </Text>
             </TouchableOpacity>
@@ -389,12 +459,75 @@ export default function IdosoScreen() {
           </View>
         )}
 
+        {/* MEU PERFIL */}
+
+        <View style={styles.perfilCard}>
+          <View style={styles.perfilCabecalho}>
+            <Ionicons
+              name="person-circle-outline"
+              size={36}
+              color="#16A34A"
+            />
+
+            <View style={{ flex: 1 }}>
+              <Text style={styles.perfilTitulo}>
+                Meu perfil
+              </Text>
+              <Text style={styles.perfilDescricao}>
+                Informe seu nome para que o familiar
+                possa identificar você.
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.label}>
+            Nome completo do idoso
+          </Text>
+
+          <TextInput
+            style={styles.input}
+            placeholder="Ex.: Maria da Silva"
+            placeholderTextColor="#94A3B8"
+            value={nomeIdoso}
+            onChangeText={setNomeIdoso}
+            editable={!bloqueado && !salvandoNome}
+            autoCapitalize="words"
+            autoCorrect={false}
+            maxLength={150}
+          />
+
+          <TouchableOpacity
+            style={[
+              styles.salvarButton,
+              (bloqueado || salvandoNome) &&
+                styles.botaoDesabilitado,
+            ]}
+            disabled={bloqueado || salvandoNome}
+            onPress={() => void salvarNomeIdoso()}
+          >
+            {salvandoNome ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <Ionicons
+                  name="save-outline"
+                  size={21}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.botaoTexto}>
+                  SALVAR MEU NOME
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
         {/* LER RECEITA */}
 
         <TouchableOpacity
           style={[styles.card, styles.receitaCard]}
           activeOpacity={0.85}
-          disabled={preparando || !!erroSessao}
+          disabled={bloqueado}
           onPress={() => abrirArea("/receita")}
         >
           <View style={[styles.iconBox, styles.receitaIcon]}>
@@ -410,8 +543,8 @@ export default function IdosoScreen() {
               Ler receita
             </Text>
             <Text style={styles.cardText}>
-              Tire uma foto da sua receita para cadastrar
-              os medicamentos
+              Tire uma foto da sua receita para
+              cadastrar os medicamentos.
             </Text>
           </View>
 
@@ -424,12 +557,12 @@ export default function IdosoScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* MEUS MEDICAMENTOS */}
+        {/* MEDICAMENTOS */}
 
         <TouchableOpacity
           style={[styles.card, styles.medicamentoCard]}
           activeOpacity={0.85}
-          disabled={preparando || !!erroSessao}
+          disabled={bloqueado}
           onPress={() => abrirArea("/medicamentos")}
         >
           <View
@@ -447,7 +580,7 @@ export default function IdosoScreen() {
               Meus medicamentos
             </Text>
             <Text style={styles.cardText}>
-              Veja seus medicamentos e horários
+              Veja seus medicamentos e horários.
             </Text>
           </View>
 
@@ -460,12 +593,12 @@ export default function IdosoScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* MINHA ROTINA */}
+        {/* ROTINA */}
 
         <TouchableOpacity
           style={[styles.card, styles.rotinaCard]}
           activeOpacity={0.85}
-          disabled={preparando || !!erroSessao}
+          disabled={bloqueado}
           onPress={() => abrirArea("/rotina")}
         >
           <View style={[styles.iconBox, styles.rotinaIcon]}>
@@ -481,7 +614,7 @@ export default function IdosoScreen() {
               Minha rotina
             </Text>
             <Text style={styles.cardText}>
-              Confira o que precisa fazer hoje
+              Confira o que precisa fazer hoje.
             </Text>
           </View>
 
@@ -506,11 +639,10 @@ export default function IdosoScreen() {
               />
             </View>
 
-            <View style={styles.vinculoConteudo}>
+            <View style={{ flex: 1 }}>
               <Text style={styles.vinculoTitulo}>
                 Vincular meu familiar
               </Text>
-
               <Text style={styles.vinculoDescricao}>
                 Conecte seu familiar para que ele receba
                 alertas e acompanhe seus medicamentos.
@@ -521,12 +653,10 @@ export default function IdosoScreen() {
           <TouchableOpacity
             style={[
               styles.gerarCodigoButton,
-              (preparando || gerandoCodigo || !!erroSessao) &&
+              (bloqueado || gerandoCodigo) &&
                 styles.botaoDesabilitado,
             ]}
-            disabled={
-              preparando || gerandoCodigo || !!erroSessao
-            }
+            disabled={bloqueado || gerandoCodigo}
             onPress={() => void gerarCodigo()}
           >
             {gerandoCodigo ? (
@@ -538,7 +668,7 @@ export default function IdosoScreen() {
                   size={22}
                   color="#FFFFFF"
                 />
-                <Text style={styles.gerarCodigoTexto}>
+                <Text style={styles.botaoTexto}>
                   GERAR CÓDIGO DO FAMILIAR
                 </Text>
               </>
@@ -590,6 +720,7 @@ export default function IdosoScreen() {
           style={styles.sos}
           activeOpacity={0.85}
           onPress={confirmarSOS}
+          disabled={enviandoSOS}
           accessibilityRole="button"
           accessibilityLabel="SOS, preciso de ajuda"
           accessibilityHint="Solicita alerta ao familiar e abre o discador do SAMU 192"
@@ -601,7 +732,9 @@ export default function IdosoScreen() {
                 size="large"
               />
             ) : (
-              <Text style={styles.sosIcon}>SOS</Text>
+              <Text style={styles.sosIcon}>
+                SOS
+              </Text>
             )}
           </View>
 
@@ -614,13 +747,11 @@ export default function IdosoScreen() {
             </Text>
           </View>
 
-          <View style={styles.sosArrow}>
-            <Ionicons
-              name="chevron-forward"
-              size={28}
-              color="#FFFFFF"
-            />
-          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={28}
+            color="#FFFFFF"
+          />
         </TouchableOpacity>
 
         {/* RODAPÉ */}
@@ -668,10 +799,6 @@ export default function IdosoScreen() {
   );
 }
 
-// ======================================================
-// ESTILOS
-// ======================================================
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -703,25 +830,8 @@ const styles = StyleSheet.create({
     marginLeft: 6,
   },
 
-  settingsButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#FFFFFF",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 3,
-    },
-    elevation: 3,
-  },
-
   welcome: {
-    marginBottom: 28,
+    marginBottom: 22,
   },
 
   title: {
@@ -787,16 +897,6 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: 14,
     marginTop: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  reiniciarTexto: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-    fontSize: 14,
-    marginLeft: 8,
   },
 
   avisoTeste: {
@@ -806,6 +906,76 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
+  perfilCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 19,
+    marginBottom: 22,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: "#D1FAE5",
+  },
+
+  perfilCabecalho: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 18,
+  },
+
+  perfilTitulo: {
+    color: "#0F2557",
+    fontSize: 21,
+    fontWeight: "900",
+  },
+
+  perfilDescricao: {
+    color: "#64748B",
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 4,
+  },
+
+  label: {
+    color: "#334155",
+    fontSize: 15,
+    fontWeight: "800",
+    marginBottom: 8,
+  },
+
+  input: {
+    minHeight: 56,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 15,
+    paddingHorizontal: 14,
+    fontSize: 17,
+    color: "#0F172A",
+    backgroundColor: "#F8FAFC",
+  },
+
+  salvarButton: {
+    minHeight: 55,
+    borderRadius: 16,
+    backgroundColor: "#16A34A",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginTop: 14,
+  },
+
+  botaoTexto: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+
+  botaoDesabilitado: {
+    opacity: 0.5,
+  },
+
   card: {
     minHeight: 128,
     borderRadius: 25,
@@ -813,13 +983,6 @@ const styles = StyleSheet.create({
     marginBottom: 17,
     flexDirection: "row",
     alignItems: "center",
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
     elevation: 4,
   },
 
@@ -910,6 +1073,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 18,
+    gap: 13,
   },
 
   vinculoIconBox: {
@@ -919,11 +1083,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#DBEAFE",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 13,
-  },
-
-  vinculoConteudo: {
-    flex: 1,
   },
 
   vinculoTitulo: {
@@ -947,17 +1106,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 10,
-  },
-
-  gerarCodigoTexto: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "900",
-    marginLeft: 9,
-  },
-
-  botaoDesabilitado: {
-    opacity: 0.5,
+    gap: 9,
   },
 
   codigoBox: {
@@ -994,13 +1143,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginTop: 14,
+    gap: 6,
   },
 
   validadeTexto: {
     color: "#B45309",
     fontWeight: "800",
     fontSize: 13,
-    marginLeft: 6,
   },
 
   expiracaoTexto: {
@@ -1018,13 +1167,6 @@ const styles = StyleSheet.create({
     marginTop: 3,
     flexDirection: "row",
     alignItems: "center",
-    shadowColor: "#DC2626",
-    shadowOpacity: 0.22,
-    shadowRadius: 12,
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
     elevation: 5,
   },
 
@@ -1059,15 +1201,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
     marginTop: 6,
-  },
-
-  sosArrow: {
-    width: 45,
-    height: 45,
-    borderRadius: 23,
-    backgroundColor: "rgba(255,255,255,0.20)",
-    justifyContent: "center",
-    alignItems: "center",
   },
 
   footer: {
