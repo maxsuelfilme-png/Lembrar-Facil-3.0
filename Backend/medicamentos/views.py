@@ -169,9 +169,7 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
             usuario=usuario_destino
         )
 
-        self.iniciar_controle_estoque(
-            medicamento
-        )
+        self.iniciar_controle_estoque(medicamento)
 
         HorarioMedicamento.objects.create(
             medicamento=medicamento,
@@ -207,9 +205,7 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
 
         medicamento = serializer.save()
 
-        self.iniciar_controle_estoque(
-            medicamento
-        )
+        self.iniciar_controle_estoque(medicamento)
 
         horario_existente = (
             HorarioMedicamento.objects.filter(
@@ -237,7 +233,7 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
             )
 
     # ==================================================
-    # REPOR ESTOQUE COM DIAGNÓSTICO DE ERROS
+    # REPOR ESTOQUE - CORRIGIDO PARA POSTGRESQL
     # ==================================================
 
     @action(
@@ -251,6 +247,10 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
             "LEMBRAFACIL_REPOSICAO_INICIADA medicamento_id=%s",
             pk,
         )
+
+        # ----------------------------------------------
+        # VALIDAR QUANTIDADE
+        # ----------------------------------------------
 
         try:
             quantidade_adicionada = Decimal(
@@ -286,19 +286,51 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
             })
 
         try:
+
+            # ------------------------------------------
+            # TRANSAÇÃO SEGURA
+            # ------------------------------------------
+
             with transaction.atomic():
 
-                medicamento = (
+                # Verifica a autorização do usuário.
+                # Esta consulta pode usar DISTINCT,
+                # mas não utiliza SELECT FOR UPDATE.
+
+                medicamento_autorizado = (
                     self.get_queryset()
-                    .select_for_update()
                     .filter(pk=pk)
                     .first()
                 )
 
-                if medicamento is None:
+                if medicamento_autorizado is None:
                     raise NotFound(
-                        "Medicamento não encontrado ou não autorizado."
+                        "Medicamento não encontrado "
+                        "ou não autorizado."
                     )
+
+                # CORREÇÃO PRINCIPAL:
+                # Bloqueia o medicamento diretamente
+                # pelo modelo, sem DISTINCT.
+                #
+                # O PostgreSQL permite FOR UPDATE
+                # nesta consulta.
+
+                medicamento = (
+                    Medicamento.objects
+                    .select_for_update()
+                    .get(pk=medicamento_autorizado.pk)
+                )
+
+                logger.info(
+                    "LEMBRAFACIL_REPOSICAO_MEDICAMENTO_LOCALIZADO "
+                    "medicamento_id=%s",
+                    pk,
+                )
+
+                # --------------------------------------
+                # VERIFICAR CONFIGURAÇÃO DO ESTOQUE
+                # --------------------------------------
 
                 if (
                     medicamento.estoque_inicial is None
@@ -313,8 +345,13 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
                         )
                     })
 
+                # --------------------------------------
+                # CALCULAR ESTOQUE RESTANTE
+                # --------------------------------------
+
                 logger.info(
-                    "LEMBRAFACIL_REPOSICAO_CALCULANDO medicamento_id=%s",
+                    "LEMBRAFACIL_REPOSICAO_CALCULANDO "
+                    "medicamento_id=%s",
                     pk,
                 )
 
@@ -353,6 +390,10 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
                         )
                     })
 
+                # --------------------------------------
+                # ADICIONAR NOVO ESTOQUE
+                # --------------------------------------
+
                 novo_estoque = (
                     restante + quantidade_adicionada
                 )
@@ -364,8 +405,13 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
                         )
                     })
 
+                # --------------------------------------
+                # INICIAR NOVO CICLO DE ESTOQUE
+                # --------------------------------------
+
                 logger.info(
-                    "LEMBRAFACIL_REPOSICAO_SALVANDO medicamento_id=%s",
+                    "LEMBRAFACIL_REPOSICAO_SALVANDO "
+                    "medicamento_id=%s",
                     pk,
                 )
 
@@ -379,8 +425,13 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
                     ]
                 )
 
+            # ------------------------------------------
+            # SERIALIZAR RESULTADO
+            # ------------------------------------------
+
             logger.info(
-                "LEMBRAFACIL_REPOSICAO_SERIALIZANDO medicamento_id=%s",
+                "LEMBRAFACIL_REPOSICAO_SERIALIZANDO "
+                "medicamento_id=%s",
                 pk,
             )
 
@@ -388,7 +439,8 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
             dados_medicamento = serializer.data
 
             logger.info(
-                "LEMBRAFACIL_REPOSICAO_SUCESSO medicamento_id=%s",
+                "LEMBRAFACIL_REPOSICAO_SUCESSO "
+                "medicamento_id=%s",
                 pk,
             )
 
@@ -408,13 +460,12 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
             NotFound,
             PermissionDenied,
         ):
-            # Erros esperados são devolvidos ao aplicativo.
             raise
 
         except Exception:
-            # Registra o traceback completo no Railway.
             logger.exception(
-                "LEMBRAFACIL_ERRO_REPOSICAO medicamento_id=%s",
+                "LEMBRAFACIL_ERRO_REPOSICAO "
+                "medicamento_id=%s",
                 pk,
             )
             raise
