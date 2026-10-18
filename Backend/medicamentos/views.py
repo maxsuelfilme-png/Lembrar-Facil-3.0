@@ -1,4 +1,5 @@
 
+import logging
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
@@ -8,6 +9,7 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import (
+    NotFound,
     PermissionDenied,
     ValidationError,
 )
@@ -21,6 +23,9 @@ from .estoque import calcular_estoque_medicamento
 from horarios.models import HorarioMedicamento
 from pacientes.models import Paciente
 from cuidadores.models import VinculoCuidadorPaciente
+
+
+logger = logging.getLogger(__name__)
 
 
 class MedicamentoViewSet(viewsets.ModelViewSet):
@@ -182,8 +187,6 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         medicamento_anterior = serializer.instance
 
-        # Evita alterar o estoque inicial de um ciclo
-        # já iniciado por meio da edição comum.
         if medicamento_anterior.estoque_iniciado_em is not None:
             campos_protegidos = {
                 "estoque_inicial",
@@ -234,7 +237,7 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
             )
 
     # ==================================================
-    # REPOR ESTOQUE
+    # REPOR ESTOQUE COM DIAGNÓSTICO DE ERROS
     # ==================================================
 
     @action(
@@ -243,6 +246,11 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
         url_path="repor-estoque",
     )
     def repor_estoque(self, request, pk=None):
+
+        logger.info(
+            "LEMBRAFACIL_REPOSICAO_INICIADA medicamento_id=%s",
+            pk,
+        )
 
         try:
             quantidade_adicionada = Decimal(
@@ -266,7 +274,6 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
                 )
             })
 
-        # Compatível com DecimalField(decimal_places=2).
         if (
             quantidade_adicionada.as_tuple().exponent < -2
             or quantidade_adicionada > Decimal("99999999.99")
@@ -278,67 +285,139 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
                 )
             })
 
-        with transaction.atomic():
+        try:
+            with transaction.atomic():
 
-            medicamento = (
-                self.get_queryset()
-                .select_for_update()
-                .get(pk=self.get_object().pk)
-            )
+                medicamento = (
+                    self.get_queryset()
+                    .select_for_update()
+                    .filter(pk=pk)
+                    .first()
+                )
 
-            if (
-                medicamento.estoque_inicial is None
-                or medicamento.consumo_por_dose is None
-                or medicamento.consumo_por_dose <= 0
-                or medicamento.estoque_iniciado_em is None
-            ):
-                raise ValidationError({
-                    "estoque": (
-                        "Configure o estoque inicial e "
-                        "o consumo por dose antes de repor."
+                if medicamento is None:
+                    raise NotFound(
+                        "Medicamento não encontrado ou não autorizado."
                     )
-                })
 
-            estoque_atual = calcular_estoque_medicamento(
-                medicamento
+                if (
+                    medicamento.estoque_inicial is None
+                    or medicamento.consumo_por_dose is None
+                    or medicamento.consumo_por_dose <= 0
+                    or medicamento.estoque_iniciado_em is None
+                ):
+                    raise ValidationError({
+                        "estoque": (
+                            "Configure o estoque inicial e "
+                            "o consumo por dose antes de repor."
+                        )
+                    })
+
+                logger.info(
+                    "LEMBRAFACIL_REPOSICAO_CALCULANDO medicamento_id=%s",
+                    pk,
+                )
+
+                estoque_atual = calcular_estoque_medicamento(
+                    medicamento
+                )
+
+                valor_restante = estoque_atual.get(
+                    "estoque_restante"
+                )
+
+                if valor_restante is None:
+                    raise ValidationError({
+                        "estoque": (
+                            "Não foi possível calcular "
+                            "o estoque restante."
+                        )
+                    })
+
+                try:
+                    restante = Decimal(
+                        str(valor_restante)
+                    )
+                except (InvalidOperation, TypeError, ValueError):
+                    raise ValidationError({
+                        "estoque": (
+                            "O cálculo retornou um valor "
+                            "de estoque inválido."
+                        )
+                    })
+
+                if not restante.is_finite():
+                    raise ValidationError({
+                        "estoque": (
+                            "O estoque calculado é inválido."
+                        )
+                    })
+
+                novo_estoque = (
+                    restante + quantidade_adicionada
+                )
+
+                if novo_estoque > Decimal("99999999.99"):
+                    raise ValidationError({
+                        "quantidade": (
+                            "O estoque excede o limite permitido."
+                        )
+                    })
+
+                logger.info(
+                    "LEMBRAFACIL_REPOSICAO_SALVANDO medicamento_id=%s",
+                    pk,
+                )
+
+                medicamento.estoque_inicial = novo_estoque
+                medicamento.estoque_iniciado_em = timezone.now()
+
+                medicamento.save(
+                    update_fields=[
+                        "estoque_inicial",
+                        "estoque_iniciado_em",
+                    ]
+                )
+
+            logger.info(
+                "LEMBRAFACIL_REPOSICAO_SERIALIZANDO medicamento_id=%s",
+                pk,
             )
 
-            restante = Decimal(
-                str(estoque_atual["estoque_restante"])
+            serializer = self.get_serializer(medicamento)
+            dados_medicamento = serializer.data
+
+            logger.info(
+                "LEMBRAFACIL_REPOSICAO_SUCESSO medicamento_id=%s",
+                pk,
             )
 
-            novo_estoque = restante + quantidade_adicionada
-
-            if novo_estoque > Decimal("99999999.99"):
-                raise ValidationError({
-                    "quantidade": "O estoque excede o limite permitido."
-                })
-
-            medicamento.estoque_inicial = novo_estoque
-
-            # Inicia novo ciclo: as doses antigas não
-            # serão descontadas novamente.
-            medicamento.estoque_iniciado_em = timezone.now()
-
-            medicamento.save(
-                update_fields=[
-                    "estoque_inicial",
-                    "estoque_iniciado_em",
-                ]
+            return Response(
+                {
+                    "mensagem": "Estoque reposto com sucesso.",
+                    "quantidade_adicionada": str(
+                        quantidade_adicionada
+                    ),
+                    "medicamento": dados_medicamento,
+                },
+                status=status.HTTP_200_OK,
             )
 
-        serializer = self.get_serializer(medicamento)
+        except (
+            ValidationError,
+            NotFound,
+            PermissionDenied,
+        ):
+            # Erros esperados são devolvidos ao aplicativo.
+            raise
 
-        return Response(
-            {
-                "mensagem": "Estoque reposto com sucesso.",
-                "quantidade_adicionada": str(
-                    quantidade_adicionada
-                ),
-                "medicamento": serializer.data,
-            },
-            status=status.HTTP_200_OK,
-        )
+        except Exception:
+            # Registra o traceback completo no Railway.
+            logger.exception(
+                "LEMBRAFACIL_ERRO_REPOSICAO medicamento_id=%s",
+                pk,
+            )
+            raise
 
     # ==================================================
     # EXCLUIR MEDICAMENTO
