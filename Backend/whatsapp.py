@@ -1,3 +1,4 @@
+
 import os
 import re
 import logging
@@ -186,5 +187,26 @@ def enviar_sos_whatsapp(nome_paciente, telefone):
         ],
         nomes_parametros=[
             "nome_paciente",
+        ],
+    )
+
+
+# ======================================================
+# ALERTA DE MEDICAMENTO ACABANDO
+# ======================================================
+
+def enviar_whatsapp_estoque(
+    nome_paciente,
+    nome_medicamento,
+    dias_restantes,
+    telefone,
+):
+    return enviar_template(
+        telefone=telefone,
+        nome_template="medicamento_acabando",
+        parametros=[
+            nome_paciente,
+            nome_medicamento,
+            str(dias_restantes),
         ],
     )

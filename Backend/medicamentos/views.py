@@ -1,6 +1,7 @@
 
 from django.db import transaction
 from django.db.models import Q
+from django.utils import timezone
 
 from rest_framework import viewsets
 from rest_framework.exceptions import (
@@ -18,6 +19,7 @@ from cuidadores.models import VinculoCuidadorPaciente
 
 
 class MedicamentoViewSet(viewsets.ModelViewSet):
+
     serializer_class = MedicamentoSerializer
     permission_classes = [IsAuthenticated]
 
@@ -29,7 +31,10 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
         return VinculoCuidadorPaciente.objects.filter(
             cuidador__usuario=self.request.user,
             ativo=True,
-        ).values_list("paciente__usuario_id", flat=True)
+        ).values_list(
+            "paciente__usuario_id",
+            flat=True,
+        )
 
     # ==================================================
     # VALIDAR PACIENTE
@@ -126,6 +131,23 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
         return paciente.usuario
 
     # ==================================================
+    # INICIAR CONTROLE DE ESTOQUE
+    # ==================================================
+
+    def iniciar_controle_estoque(self, medicamento):
+        if (
+            medicamento.estoque_inicial is not None
+            and medicamento.consumo_por_dose is not None
+            and medicamento.consumo_por_dose > 0
+            and medicamento.estoque_iniciado_em is None
+        ):
+            medicamento.estoque_iniciado_em = timezone.now()
+
+            medicamento.save(
+                update_fields=["estoque_iniciado_em"]
+            )
+
+    # ==================================================
     # CADASTRAR MEDICAMENTO
     # ==================================================
 
@@ -135,6 +157,10 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
 
         medicamento = serializer.save(
             usuario=usuario_destino
+        )
+
+        self.iniciar_controle_estoque(
+            medicamento
         )
 
         HorarioMedicamento.objects.create(
@@ -151,6 +177,10 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         medicamento = serializer.save()
 
+        self.iniciar_controle_estoque(
+            medicamento
+        )
+
         horario_existente = (
             HorarioMedicamento.objects.filter(
                 medicamento=medicamento
@@ -162,8 +192,12 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
         if horario_existente:
             horario_existente.horario = medicamento.horario
             horario_existente.ativo = True
+
             horario_existente.save(
-                update_fields=["horario", "ativo"]
+                update_fields=[
+                    "horario",
+                    "ativo",
+                ]
             )
         else:
             HorarioMedicamento.objects.create(
