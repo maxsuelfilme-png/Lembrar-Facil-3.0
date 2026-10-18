@@ -48,7 +48,7 @@ def enviar_template(
 
     if not token or not phone_number_id:
         logger.error(
-            "WhatsApp: token ou Phone Number ID não configurado."
+            "WhatsApp: token ou Phone Number ID nao configurado."
         )
         return False
 
@@ -56,14 +56,14 @@ def enviar_template(
 
     if not destinatario:
         logger.error(
-            "WhatsApp: telefone do destinatário inválido."
+            "WhatsApp: telefone do destinatario invalido."
         )
         return False
 
     if nomes_parametros is not None:
         if len(nomes_parametros) != len(parametros):
             logger.error(
-                "WhatsApp: quantidade de nomes e parâmetros diferente."
+                "WhatsApp: quantidade de nomes e parametros diferente."
             )
             return False
 
@@ -119,7 +119,7 @@ def enviar_template(
 
         if resposta.ok:
             logger.info(
-                "WhatsApp: solicitação aceita pela Meta. "
+                "WhatsApp: mensagem aceita pela Meta. "
                 "Template=%s | HTTP=%s",
                 nome_template,
                 resposta.status_code,
@@ -145,22 +145,24 @@ def enviar_template(
             erro_meta.get("code"),
             erro_meta.get("error_subcode"),
             erro_meta.get("message"),
-            erro_meta.get("error_data", {}).get("details")
-            if isinstance(erro_meta.get("error_data"), dict)
-            else None,
+            (
+                erro_meta.get("error_data", {}).get("details")
+                if isinstance(erro_meta.get("error_data"), dict)
+                else None
+            ),
         )
 
         return False
 
     except requests.RequestException:
         logger.exception(
-            "WhatsApp: erro de conexão com a Meta."
+            "WhatsApp: erro de conexao com a Meta."
         )
         return False
 
 
 # ======================================================
-# ALERTA AUTOMÁTICO DE MEDICAMENTO ATRASADO
+# ALERTA AUTOMATICO DE MEDICAMENTO ATRASADO
 # ======================================================
 
 def enviar_whatsapp(medicamento, horario, telefone):
@@ -175,7 +177,7 @@ def enviar_whatsapp(medicamento, horario, telefone):
 
 
 # ======================================================
-# ALERTA MANUAL DO BOTÃO SOS
+# ALERTA MANUAL DO BOTAO SOS
 # ======================================================
 
 def enviar_sos_whatsapp(nome_paciente, telefone):
@@ -205,8 +207,13 @@ def enviar_whatsapp_estoque(
         telefone=telefone,
         nome_template="medicamento_acabando",
         parametros=[
-            nome_paciente,
             nome_medicamento,
+            nome_paciente,
             str(dias_restantes),
+        ],
+        nomes_parametros=[
+            "medicamento",
+            "paciente",
+            "dias_restantes",
         ],
     )

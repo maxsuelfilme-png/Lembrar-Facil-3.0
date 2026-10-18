@@ -23,14 +23,46 @@ import {
   atualizarMedicamento,
   excluirMedicamento,
   listarMedicamentos,
+  reporEstoqueMedicamento,
   type Medicamento,
   type DadosMedicamento,
   type OpcoesMedicamentos,
 } from "../services/medicamentosService";
 
-import {
-  sincronizarLembretes,
-} from "../services/lembretesService";
+import { sincronizarLembretes } from "../services/lembretesService";
+
+// ======================================================
+// FUNÇÕES AUXILIARES
+// ======================================================
+
+function numeroParaTexto(valor: number | null): string {
+  if (valor === null) return "";
+  return String(valor).replace(".", ",");
+}
+
+function textoParaNumero(valor: string): number | null {
+  if (!valor.trim()) return null;
+
+  const numero = Number(valor.trim().replace(",", "."));
+
+  if (!Number.isFinite(numero)) {
+    throw new Error("Informe um número válido para o estoque.");
+  }
+
+  return numero;
+}
+
+function formatarNumero(valor: number | null): string {
+  if (valor === null) return "Não calculado";
+
+  return valor.toLocaleString("pt-BR", {
+    maximumFractionDigits: 2,
+  });
+}
+
+// ======================================================
+// TELA DE MEDICAMENTOS
+// ======================================================
 
 export default function MedicamentosScreen() {
   const router = useRouter();
@@ -48,10 +80,7 @@ export default function MedicamentosScreen() {
     if (params.perfil === "familiar") {
       const pacienteId = Number(params.pacienteId);
 
-      if (
-        !Number.isInteger(pacienteId) ||
-        pacienteId <= 0
-      ) {
+      if (!Number.isInteger(pacienteId) || pacienteId <= 0) {
         return null;
       }
 
@@ -64,12 +93,15 @@ export default function MedicamentosScreen() {
     return null;
   }, [params.perfil, params.pacienteId]);
 
+  // ====================================================
+  // ESTADOS
+  // ====================================================
+
   const [medicamentos, setMedicamentos] =
     useState<Medicamento[]>([]);
 
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
-
   const [editandoId, setEditandoId] =
     useState<string | null>(null);
 
@@ -80,10 +112,33 @@ export default function MedicamentosScreen() {
   const [frequencia, setFrequencia] = useState("");
   const [duracao, setDuracao] = useState("");
 
+  // Controle de estoque
+  const [estoqueInicial, setEstoqueInicial] = useState("");
+  const [consumoPorDose, setConsumoPorDose] = useState("");
+  const [unidadeEstoque, setUnidadeEstoque] =
+    useState("comprimido");
+
+  const [estoqueJaIniciado, setEstoqueJaIniciado] =
+    useState(false);
+
+  // Reposição de estoque
+  const [repondoId, setRepondoId] =
+    useState<string | null>(null);
+
+  const [quantidadeReposicao, setQuantidadeReposicao] =
+    useState("");
+
+  const [processandoReposicao, setProcessandoReposicao] =
+    useState(false);
+
   const perfilTexto =
     opcoes?.perfil === "idoso"
       ? "Minha rotina de medicamentos"
       : "Medicamentos do paciente vinculado";
+
+  // ====================================================
+  // CARREGAR MEDICAMENTOS
+  // ====================================================
 
   const carregarMedicamentos = useCallback(async () => {
     if (!opcoes) {
@@ -126,6 +181,10 @@ export default function MedicamentosScreen() {
     }, [carregarMedicamentos])
   );
 
+  // ====================================================
+  // LIMPAR FORMULÁRIO
+  // ====================================================
+
   function limparFormulario() {
     setNome("");
     setDosagem("");
@@ -133,48 +192,76 @@ export default function MedicamentosScreen() {
     setHorario("");
     setFrequencia("");
     setDuracao("");
+
+    setEstoqueInicial("");
+    setConsumoPorDose("");
+    setUnidadeEstoque("comprimido");
+    setEstoqueJaIniciado(false);
+
     setEditandoId(null);
   }
 
+  // ====================================================
+  // SALVAR MEDICAMENTO
+  // ====================================================
+
   async function salvarMedicamento() {
-    if (!opcoes || salvando) {
-      return;
-    }
+    if (!opcoes || salvando) return;
 
     if (!nome.trim()) {
-      Alert.alert(
-        "Atenção",
-        "Informe o nome do medicamento."
-      );
+      Alert.alert("Atenção", "Informe o nome do medicamento.");
       return;
     }
 
     if (!dosagem.trim()) {
-      Alert.alert(
-        "Atenção",
-        "Informe a dosagem."
-      );
+      Alert.alert("Atenção", "Informe a dosagem.");
       return;
     }
 
     if (!horario.trim()) {
-      Alert.alert(
-        "Atenção",
-        "Informe o horário."
-      );
+      Alert.alert("Atenção", "Informe o horário.");
       return;
     }
 
-    const dados: DadosMedicamento = {
-      medicamento: nome.trim(),
-      dosagem: dosagem.trim(),
-      quantidade: quantidade.trim(),
-      horario: horario.trim(),
-      frequencia: frequencia.trim(),
-      duracao: duracao.trim(),
-    };
-
     try {
+      const dados: DadosMedicamento = {
+        medicamento: nome.trim(),
+        dosagem: dosagem.trim(),
+        quantidade: quantidade.trim(),
+        horario: horario.trim(),
+        frequencia: frequencia.trim(),
+        duracao: duracao.trim(),
+      };
+
+      // Não alterar estoque inicial de ciclo existente.
+      if (!estoqueJaIniciado) {
+        const estoque = textoParaNumero(estoqueInicial);
+        const consumo = textoParaNumero(consumoPorDose);
+
+        if ((estoque === null) !== (consumo === null)) {
+          throw new Error(
+            "Preencha o estoque inicial e o consumo por dose juntos."
+          );
+        }
+
+        if (estoque !== null && estoque < 0) {
+          throw new Error("O estoque não pode ser negativo.");
+        }
+
+        if (consumo !== null && consumo <= 0) {
+          throw new Error(
+            "O consumo por dose deve ser maior que zero."
+          );
+        }
+
+        if (estoque !== null && consumo !== null) {
+          dados.estoque_inicial = estoque;
+          dados.consumo_por_dose = consumo;
+          dados.unidade_estoque =
+            unidadeEstoque.trim() || "comprimido";
+        }
+      }
+
       setSalvando(true);
 
       if (editandoId) {
@@ -185,9 +272,7 @@ export default function MedicamentosScreen() {
         );
 
         if (!atualizado) {
-          throw new Error(
-            "Medicamento não encontrado."
-          );
+          throw new Error("Medicamento não encontrado.");
         }
 
         Alert.alert(
@@ -206,31 +291,54 @@ export default function MedicamentosScreen() {
       limparFormulario();
       await carregarMedicamentos();
     } catch (erro) {
-      const mensagem =
+      Alert.alert(
+        "Erro",
         erro instanceof Error
           ? erro.message
-          : "Não foi possível salvar o medicamento.";
-
-      Alert.alert("Erro", mensagem);
+          : "Não foi possível salvar o medicamento."
+      );
     } finally {
       setSalvando(false);
     }
   }
 
+  // ====================================================
+  // EDITAR MEDICAMENTO
+  // ====================================================
+
   function editarMedicamento(medicamento: Medicamento) {
     setEditandoId(medicamento.id);
+
     setNome(medicamento.medicamento);
     setDosagem(medicamento.dosagem);
     setQuantidade(medicamento.quantidade);
     setHorario(medicamento.horario);
     setFrequencia(medicamento.frequencia);
     setDuracao(medicamento.duracao);
+
+    setEstoqueInicial(
+      numeroParaTexto(medicamento.estoque_inicial)
+    );
+
+    setConsumoPorDose(
+      numeroParaTexto(medicamento.consumo_por_dose)
+    );
+
+    setUnidadeEstoque(
+      medicamento.unidade_estoque || "comprimido"
+    );
+
+    setEstoqueJaIniciado(
+      Boolean(medicamento.estoque_iniciado_em)
+    );
   }
 
+  // ====================================================
+  // EXCLUIR MEDICAMENTO
+  // ====================================================
+
   function confirmarExclusao(id: string) {
-    if (!opcoes) {
-      return;
-    }
+    if (!opcoes) return;
 
     Alert.alert(
       "Excluir medicamento",
@@ -251,13 +359,16 @@ export default function MedicamentosScreen() {
               );
 
               if (!excluido) {
-                throw new Error(
-                  "Medicamento não encontrado."
-                );
+                throw new Error("Medicamento não encontrado.");
               }
 
               if (editandoId === id) {
                 limparFormulario();
+              }
+
+              if (repondoId === id) {
+                setRepondoId(null);
+                setQuantidadeReposicao("");
               }
 
               await carregarMedicamentos();
@@ -267,18 +378,126 @@ export default function MedicamentosScreen() {
                 "Medicamento removido com sucesso."
               );
             } catch (erro) {
-              const mensagem =
+              Alert.alert(
+                "Erro",
                 erro instanceof Error
                   ? erro.message
-                  : "Não foi possível excluir o medicamento.";
-
-              Alert.alert("Erro", mensagem);
+                  : "Não foi possível excluir o medicamento."
+              );
             }
           },
         },
       ]
     );
   }
+
+  // ====================================================
+  // ABRIR / CANCELAR REPOSIÇÃO
+  // ====================================================
+
+  function abrirReposicao(id: string) {
+    if (processandoReposicao) return;
+
+    setRepondoId(id);
+    setQuantidadeReposicao("");
+  }
+
+  function cancelarReposicao() {
+    if (processandoReposicao) return;
+
+    setRepondoId(null);
+    setQuantidadeReposicao("");
+  }
+
+  // ====================================================
+  // CONFIRMAR REPOSIÇÃO
+  // ====================================================
+
+  function confirmarReposicao() {
+    if (!repondoId || !opcoes || processandoReposicao) {
+      return;
+    }
+
+    const valor = quantidadeReposicao.trim().replace(",", ".");
+    const quantidadeNova = Number(valor);
+
+    if (
+      !valor ||
+      !Number.isFinite(quantidadeNova) ||
+      quantidadeNova <= 0 ||
+      !/^\d+(\.\d{1,2})?$/.test(valor)
+    ) {
+      Alert.alert(
+        "Quantidade inválida",
+        "Informe uma quantidade maior que zero, com até duas casas decimais."
+      );
+      return;
+    }
+
+    const medicamento = medicamentos.find(
+      (item) => item.id === repondoId
+    );
+
+    if (!medicamento) {
+      Alert.alert("Erro", "Medicamento não encontrado.");
+      return;
+    }
+
+    const medicamentoId = repondoId;
+
+    Alert.alert(
+      "Confirmar reposição",
+      `Deseja adicionar ${quantidadeReposicao} ${medicamento.unidade_estoque} ao estoque de ${medicamento.medicamento}?`,
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
+        {
+          text: "Confirmar",
+          onPress: async () => {
+            if (processandoReposicao) return;
+
+            try {
+              setProcessandoReposicao(true);
+
+              // CORREÇÃO:
+              // Passa as opções do perfil para usar
+              // o token correto do idoso ou familiar.
+              await reporEstoqueMedicamento(
+                medicamentoId,
+                quantidadeNova,
+                opcoes
+              );
+
+              setRepondoId(null);
+              setQuantidadeReposicao("");
+
+              await carregarMedicamentos();
+
+              Alert.alert(
+                "Estoque atualizado",
+                "Reposição registrada com sucesso!"
+              );
+            } catch (erro) {
+              Alert.alert(
+                "Erro na reposição",
+                erro instanceof Error
+                  ? erro.message
+                  : "Não foi possível repor o estoque."
+              );
+            } finally {
+              setProcessandoReposicao(false);
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  // ====================================================
+  // ACESSO INVÁLIDO
+  // ====================================================
 
   if (!opcoes) {
     return (
@@ -290,22 +509,23 @@ export default function MedicamentosScreen() {
         </Text>
 
         <Text style={styles.erroTexto}>
-          Abra os medicamentos pela tela do idoso
-          ou selecione um paciente vinculado na
-          área do familiar.
+          Abra os medicamentos pela tela do idoso ou
+          selecione um paciente vinculado na área do familiar.
         </Text>
 
         <TouchableOpacity
           style={styles.salvarButton}
           onPress={() => router.back()}
         >
-          <Text style={styles.salvarText}>
-            VOLTAR
-          </Text>
+          <Text style={styles.salvarText}>VOLTAR</Text>
         </TouchableOpacity>
       </View>
     );
   }
+
+  // ====================================================
+  // INTERFACE
+  // ====================================================
 
   return (
     <ScrollView
@@ -314,18 +534,13 @@ export default function MedicamentosScreen() {
       keyboardShouldPersistTaps="handled"
     >
       <TouchableOpacity onPress={() => router.back()}>
-        <Text style={styles.voltar}>
-          ← Voltar
-        </Text>
+        <Text style={styles.voltar}>← Voltar</Text>
       </TouchableOpacity>
 
-      <Text style={styles.titulo}>
-        💊 Medicamentos
-      </Text>
+      <Text style={styles.titulo}>💊 Medicamentos</Text>
+      <Text style={styles.subtitulo}>{perfilTexto}</Text>
 
-      <Text style={styles.subtitulo}>
-        {perfilTexto}
-      </Text>
+      {/* FORMULÁRIO */}
 
       <View style={styles.formulario}>
         <Text style={styles.formTitulo}>
@@ -334,10 +549,7 @@ export default function MedicamentosScreen() {
             : "➕ Novo medicamento"}
         </Text>
 
-        <Text style={styles.label}>
-          Nome do medicamento
-        </Text>
-
+        <Text style={styles.label}>Nome do medicamento</Text>
         <TextInput
           style={styles.input}
           placeholder="Ex.: Dipirona"
@@ -346,10 +558,7 @@ export default function MedicamentosScreen() {
           editable={!salvando}
         />
 
-        <Text style={styles.label}>
-          Dosagem
-        </Text>
-
+        <Text style={styles.label}>Dosagem</Text>
         <TextInput
           style={styles.input}
           placeholder="Ex.: 500 mg"
@@ -358,10 +567,7 @@ export default function MedicamentosScreen() {
           editable={!salvando}
         />
 
-        <Text style={styles.label}>
-          Quantidade
-        </Text>
-
+        <Text style={styles.label}>Quantidade da receita</Text>
         <TextInput
           style={styles.input}
           placeholder="Ex.: 1 comprimido"
@@ -370,10 +576,7 @@ export default function MedicamentosScreen() {
           editable={!salvando}
         />
 
-        <Text style={styles.label}>
-          Horário
-        </Text>
-
+        <Text style={styles.label}>Horário</Text>
         <TextInput
           style={styles.input}
           placeholder="Ex.: 08:00"
@@ -382,10 +585,7 @@ export default function MedicamentosScreen() {
           editable={!salvando}
         />
 
-        <Text style={styles.label}>
-          Frequência
-        </Text>
-
+        <Text style={styles.label}>Frequência</Text>
         <TextInput
           style={styles.input}
           placeholder="Ex.: 1 vez ao dia"
@@ -394,17 +594,70 @@ export default function MedicamentosScreen() {
           editable={!salvando}
         />
 
-        <Text style={styles.label}>
-          Duração
-        </Text>
-
+        <Text style={styles.label}>Duração</Text>
         <TextInput
           style={styles.input}
-          placeholder="Ex.: 7 dias"
+          placeholder="Ex.: 30 dias"
           value={duracao}
           onChangeText={setDuracao}
           editable={!salvando}
         />
+
+        {/* CONTROLE DE ESTOQUE */}
+
+        <View style={styles.estoqueSecao}>
+          <Text style={styles.estoqueTitulo}>
+            📦 Controle de estoque
+          </Text>
+
+          <Text style={styles.estoqueDescricao}>
+            Informe a quantidade disponível e quanto é
+            utilizado em cada dose.
+          </Text>
+
+          {estoqueJaIniciado ? (
+            <View style={styles.avisoInfo}>
+              <Text style={styles.avisoInfoTexto}>
+                O controle de estoque já foi iniciado.
+                Para adicionar medicamentos, utilize o botão
+                "Repor estoque" no cartão correspondente.
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.label}>Estoque inicial</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex.: 30"
+                keyboardType="decimal-pad"
+                value={estoqueInicial}
+                onChangeText={setEstoqueInicial}
+                editable={!salvando}
+              />
+
+              <Text style={styles.label}>Consumo por dose</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex.: 1"
+                keyboardType="decimal-pad"
+                value={consumoPorDose}
+                onChangeText={setConsumoPorDose}
+                editable={!salvando}
+              />
+
+              <Text style={styles.label}>Unidade de estoque</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex.: comprimido, mL, gotas"
+                value={unidadeEstoque}
+                onChangeText={setUnidadeEstoque}
+                editable={!salvando}
+              />
+            </>
+          )}
+        </View>
+
+        {/* SALVAR */}
 
         <TouchableOpacity
           style={[
@@ -438,6 +691,8 @@ export default function MedicamentosScreen() {
         )}
       </View>
 
+      {/* LISTA DE MEDICAMENTOS */}
+
       <View style={styles.listaContainer}>
         <Text style={styles.listaTitulo}>
           📋 Medicamentos cadastrados
@@ -445,9 +700,7 @@ export default function MedicamentosScreen() {
 
         <TouchableOpacity
           style={styles.atualizarButton}
-          onPress={() => {
-            void carregarMedicamentos();
-          }}
+          onPress={() => void carregarMedicamentos()}
           disabled={carregando}
         >
           <Text style={styles.atualizarText}>
@@ -463,25 +716,17 @@ export default function MedicamentosScreen() {
           />
         ) : medicamentos.length === 0 ? (
           <View style={styles.vazio}>
-            <Text style={styles.vazioEmoji}>
-              💊
-            </Text>
-
+            <Text style={styles.vazioEmoji}>💊</Text>
             <Text style={styles.vazioTitulo}>
               Nenhum medicamento cadastrado
             </Text>
-
             <Text style={styles.vazioTexto}>
-              Cadastre um medicamento acima
-              para começar.
+              Cadastre um medicamento acima para começar.
             </Text>
           </View>
         ) : (
           medicamentos.map((item) => (
-            <View
-              key={item.id}
-              style={styles.card}
-            >
+            <View key={item.id} style={styles.card}>
               <Text style={styles.nomeMedicamento}>
                 💊 {item.medicamento}
               </Text>
@@ -491,8 +736,7 @@ export default function MedicamentosScreen() {
               </Text>
 
               <Text style={styles.info}>
-                Quantidade:{" "}
-                {item.quantidade || "Não informado"}
+                Quantidade: {item.quantidade || "Não informado"}
               </Text>
 
               <Text style={styles.info}>
@@ -500,21 +744,130 @@ export default function MedicamentosScreen() {
               </Text>
 
               <Text style={styles.info}>
-                Frequência:{" "}
-                {item.frequencia || "Não informado"}
+                Frequência: {item.frequencia || "Não informado"}
               </Text>
 
               <Text style={styles.info}>
-                Duração:{" "}
-                {item.duracao || "Não informado"}
+                Duração: {item.duracao || "Não informado"}
               </Text>
+
+              {/* ESTOQUE DO MEDICAMENTO */}
+
+              <View style={styles.estoqueCard}>
+                <Text style={styles.estoqueCardTitulo}>
+                  📦 Estoque do medicamento
+                </Text>
+
+                {item.estoque?.configurado ? (
+                  <>
+                    <Text style={styles.info}>
+                      Estoque restante:{" "}
+                      {formatarNumero(
+                        item.estoque.estoque_restante
+                      )}{" "}
+                      {item.unidade_estoque}
+                    </Text>
+
+                    <Text style={styles.info}>
+                      Doses restantes:{" "}
+                      {formatarNumero(
+                        item.estoque.doses_restantes
+                      )}
+                    </Text>
+
+                    <Text style={styles.info}>
+                      Dias estimados:{" "}
+                      {formatarNumero(
+                        item.estoque.dias_restantes
+                      )}
+                    </Text>
+
+                    {item.estoque.alerta_estoque && (
+                      <View style={styles.alertaEstoque}>
+                        <Text style={styles.alertaEstoqueTexto}>
+                          ⚠️ Estoque baixo! Verifique a
+                          necessidade de reposição.
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* REPOR ESTOQUE */}
+
+                    {repondoId === item.id ? (
+                      <View style={styles.reposicaoBox}>
+                        <Text style={styles.reposicaoTitulo}>
+                          📦 Adicionar ao estoque
+                        </Text>
+
+                        <Text style={styles.reposicaoDescricao}>
+                          Informe a quantidade comprada.
+                          Ela será somada ao estoque restante.
+                        </Text>
+
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Ex.: 30"
+                          keyboardType="decimal-pad"
+                          value={quantidadeReposicao}
+                          onChangeText={setQuantidadeReposicao}
+                          editable={!processandoReposicao}
+                        />
+
+                        <TouchableOpacity
+                          style={[
+                            styles.reporButton,
+                            processandoReposicao &&
+                              styles.botaoDesabilitado,
+                          ]}
+                          onPress={confirmarReposicao}
+                          disabled={processandoReposicao}
+                        >
+                          {processandoReposicao ? (
+                            <ActivityIndicator color="#FFFFFF" />
+                          ) : (
+                            <Text style={styles.reporText}>
+                              Confirmar reposição
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.cancelarButton}
+                          onPress={cancelarReposicao}
+                          disabled={processandoReposicao}
+                        >
+                          <Text style={styles.cancelarText}>
+                            Cancelar
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.abrirReposicaoButton}
+                        onPress={() => abrirReposicao(item.id)}
+                        disabled={processandoReposicao}
+                      >
+                        <Text style={styles.abrirReposicaoText}>
+                          📦 Repor estoque
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                ) : (
+                  <Text style={styles.info}>
+                    Controle de estoque não configurado.
+                    Toque em Editar para informar a quantidade
+                    disponível.
+                  </Text>
+                )}
+              </View>
+
+              {/* EDITAR E EXCLUIR */}
 
               <View style={styles.acoes}>
                 <TouchableOpacity
                   style={styles.editarButton}
-                  onPress={() =>
-                    editarMedicamento(item)
-                  }
+                  onPress={() => editarMedicamento(item)}
                 >
                   <Text style={styles.editarText}>
                     ✏️ Editar
@@ -523,9 +876,7 @@ export default function MedicamentosScreen() {
 
                 <TouchableOpacity
                   style={styles.excluirButton}
-                  onPress={() =>
-                    confirmarExclusao(item.id)
-                  }
+                  onPress={() => confirmarExclusao(item.id)}
                 >
                   <Text style={styles.excluirText}>
                     🗑️ Excluir
@@ -539,6 +890,10 @@ export default function MedicamentosScreen() {
     </ScrollView>
   );
 }
+
+// ======================================================
+// ESTILOS
+// ======================================================
 
 const styles = StyleSheet.create({
   container: {
@@ -601,6 +956,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontSize: 16,
     backgroundColor: "#FAFAFA",
+  },
+
+  estoqueSecao: {
+    marginTop: 22,
+    padding: 15,
+    backgroundColor: "#EFF6FF",
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+
+  estoqueTitulo: {
+    fontSize: 19,
+    fontWeight: "800",
+    color: "#1D4ED8",
+  },
+
+  estoqueDescricao: {
+    fontSize: 14,
+    color: "#475569",
+    marginTop: 7,
+    marginBottom: 10,
+    lineHeight: 21,
+  },
+
+  avisoInfo: {
+    backgroundColor: "#DBEAFE",
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 12,
+  },
+
+  avisoInfoTexto: {
+    fontSize: 14,
+    color: "#1E40AF",
+    lineHeight: 21,
   },
 
   salvarButton: {
@@ -707,6 +1098,89 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
 
+  estoqueCard: {
+    marginTop: 14,
+    padding: 14,
+    backgroundColor: "#F0FDF4",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+
+  estoqueCardTitulo: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#166534",
+    marginBottom: 10,
+  },
+
+  alertaEstoque: {
+    backgroundColor: "#FEF3C7",
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#FCD34D",
+  },
+
+  alertaEstoqueTexto: {
+    color: "#92400E",
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+
+  abrirReposicaoButton: {
+    backgroundColor: "#16A34A",
+    borderRadius: 12,
+    padding: 13,
+    alignItems: "center",
+    marginTop: 14,
+  },
+
+  abrirReposicaoText: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+    fontSize: 15,
+  },
+
+  reposicaoBox: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#86EFAC",
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 14,
+  },
+
+  reposicaoTitulo: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#166534",
+    marginBottom: 6,
+  },
+
+  reposicaoDescricao: {
+    color: "#475569",
+    fontSize: 14,
+    marginBottom: 12,
+    lineHeight: 20,
+  },
+
+  reporButton: {
+    backgroundColor: "#15803D",
+    borderRadius: 12,
+    padding: 14,
+    alignItems: "center",
+    marginTop: 12,
+  },
+
+  reporText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+
   acoes: {
     flexDirection: "row",
     gap: 10,
@@ -763,5 +1237,6 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
     marginTop: 12,
+    marginBottom: 15,
   },
 });

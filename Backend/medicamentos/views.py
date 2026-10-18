@@ -1,17 +1,22 @@
 
+from decimal import Decimal, InvalidOperation
+
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from rest_framework import viewsets
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import (
     PermissionDenied,
     ValidationError,
 )
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 from .models import Medicamento
 from .serializers import MedicamentoSerializer
+from .estoque import calcular_estoque_medicamento
 
 from horarios.models import HorarioMedicamento
 from pacientes.models import Paciente
@@ -175,6 +180,28 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
 
     @transaction.atomic
     def perform_update(self, serializer):
+        medicamento_anterior = serializer.instance
+
+        # Evita alterar o estoque inicial de um ciclo
+        # já iniciado por meio da edição comum.
+        if medicamento_anterior.estoque_iniciado_em is not None:
+            campos_protegidos = {
+                "estoque_inicial",
+                "consumo_por_dose",
+                "unidade_estoque",
+            }
+
+            if campos_protegidos.intersection(
+                serializer.validated_data.keys()
+            ):
+                raise ValidationError({
+                    "estoque": (
+                        "O controle de estoque já foi iniciado. "
+                        "Utilize a função de reposição para "
+                        "adicionar medicamentos."
+                    )
+                })
+
         medicamento = serializer.save()
 
         self.iniciar_controle_estoque(
@@ -205,6 +232,113 @@ class MedicamentoViewSet(viewsets.ModelViewSet):
                 horario=medicamento.horario,
                 ativo=True,
             )
+
+    # ==================================================
+    # REPOR ESTOQUE
+    # ==================================================
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="repor-estoque",
+    )
+    def repor_estoque(self, request, pk=None):
+
+        try:
+            quantidade_adicionada = Decimal(
+                str(request.data.get("quantidade", ""))
+            )
+        except (InvalidOperation, TypeError, ValueError):
+            raise ValidationError({
+                "quantidade": (
+                    "Informe uma quantidade numérica válida."
+                )
+            })
+
+        if (
+            not quantidade_adicionada.is_finite()
+            or quantidade_adicionada <= 0
+        ):
+            raise ValidationError({
+                "quantidade": (
+                    "A quantidade de reposição "
+                    "deve ser maior que zero."
+                )
+            })
+
+        # Compatível com DecimalField(decimal_places=2).
+        if (
+            quantidade_adicionada.as_tuple().exponent < -2
+            or quantidade_adicionada > Decimal("99999999.99")
+        ):
+            raise ValidationError({
+                "quantidade": (
+                    "Informe uma quantidade com até "
+                    "duas casas decimais, dentro do limite."
+                )
+            })
+
+        with transaction.atomic():
+
+            medicamento = (
+                self.get_queryset()
+                .select_for_update()
+                .get(pk=self.get_object().pk)
+            )
+
+            if (
+                medicamento.estoque_inicial is None
+                or medicamento.consumo_por_dose is None
+                or medicamento.consumo_por_dose <= 0
+                or medicamento.estoque_iniciado_em is None
+            ):
+                raise ValidationError({
+                    "estoque": (
+                        "Configure o estoque inicial e "
+                        "o consumo por dose antes de repor."
+                    )
+                })
+
+            estoque_atual = calcular_estoque_medicamento(
+                medicamento
+            )
+
+            restante = Decimal(
+                str(estoque_atual["estoque_restante"])
+            )
+
+            novo_estoque = restante + quantidade_adicionada
+
+            if novo_estoque > Decimal("99999999.99"):
+                raise ValidationError({
+                    "quantidade": "O estoque excede o limite permitido."
+                })
+
+            medicamento.estoque_inicial = novo_estoque
+
+            # Inicia novo ciclo: as doses antigas não
+            # serão descontadas novamente.
+            medicamento.estoque_iniciado_em = timezone.now()
+
+            medicamento.save(
+                update_fields=[
+                    "estoque_inicial",
+                    "estoque_iniciado_em",
+                ]
+            )
+
+        serializer = self.get_serializer(medicamento)
+
+        return Response(
+            {
+                "mensagem": "Estoque reposto com sucesso.",
+                "quantidade_adicionada": str(
+                    quantidade_adicionada
+                ),
+                "medicamento": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
     # ==================================================
     # EXCLUIR MEDICAMENTO

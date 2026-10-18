@@ -11,6 +11,14 @@ import {
 // TIPOS
 // ======================================================
 
+export type EstoqueMedicamento = {
+  configurado: boolean;
+  estoque_restante: number | null;
+  doses_restantes: number | null;
+  dias_restantes: number | null;
+  alerta_estoque: boolean;
+};
+
 export type Medicamento = {
   id: string;
   medicamento: string;
@@ -19,9 +27,26 @@ export type Medicamento = {
   horario: string;
   frequencia: string;
   duracao: string;
+
+  estoque_inicial: number | null;
+  consumo_por_dose: number | null;
+  unidade_estoque: string;
+  estoque_iniciado_em: string | null;
+  estoque: EstoqueMedicamento | null;
 };
 
-export type DadosMedicamento = Omit<Medicamento, "id">;
+export type DadosMedicamento = {
+  medicamento: string;
+  dosagem: string;
+  quantidade: string;
+  horario: string;
+  frequencia: string;
+  duracao: string;
+
+  estoque_inicial?: number | null;
+  consumo_por_dose?: number | null;
+  unidade_estoque?: string;
+};
 
 export type PerfilMedicamentos = "idoso" | "familiar";
 
@@ -41,6 +66,18 @@ type MedicamentoAPI = {
   observacao?: string;
   ativo?: boolean;
   criado_em?: string;
+
+  estoque_inicial?: string | number | null;
+  consumo_por_dose?: string | number | null;
+  unidade_estoque?: string;
+  estoque_iniciado_em?: string | null;
+  estoque?: EstoqueMedicamento | null;
+};
+
+type RespostaReposicaoAPI = {
+  mensagem: string;
+  quantidade_adicionada: string;
+  medicamento: MedicamentoAPI;
 };
 
 // ======================================================
@@ -51,10 +88,28 @@ const MEDICAMENTOS_URL =
   `${API_URL.replace(/\/$/, "")}/medicamentos/`;
 
 // ======================================================
-// CONVERTER DADOS DO DJANGO PARA O APLICATIVO
+// CONVERSÕES
 // ======================================================
 
-function converterDaAPI(item: MedicamentoAPI): Medicamento {
+function numeroOuNull(
+  valor: string | number | null | undefined
+): number | null {
+  if (
+    valor === null ||
+    valor === undefined ||
+    valor === ""
+  ) {
+    return null;
+  }
+
+  const numero = Number(valor);
+
+  return Number.isFinite(numero) ? numero : null;
+}
+
+function converterDaAPI(
+  item: MedicamentoAPI
+): Medicamento {
   return {
     id: String(item.id),
     medicamento: item.nome ?? "",
@@ -65,6 +120,22 @@ function converterDaAPI(item: MedicamentoAPI): Medicamento {
       : "",
     frequencia: item.frequencia ?? "",
     duracao: item.duracao ?? "",
+
+    estoque_inicial: numeroOuNull(
+      item.estoque_inicial
+    ),
+
+    consumo_por_dose: numeroOuNull(
+      item.consumo_por_dose
+    ),
+
+    unidade_estoque:
+      item.unidade_estoque || "comprimido",
+
+    estoque_iniciado_em:
+      item.estoque_iniciado_em ?? null,
+
+    estoque: item.estoque ?? null,
   };
 }
 
@@ -121,38 +192,92 @@ function normalizarHorario(horario: string): string {
 }
 
 // ======================================================
-// CONVERTER DADOS DO APLICATIVO PARA O DJANGO
+// CONVERTER PARA O DJANGO
 // ======================================================
 
-function converterParaAPI(medicamento: DadosMedicamento) {
+function converterParaAPI(
+  medicamento: DadosMedicamento
+): Record<string, unknown> {
   if (!medicamento.medicamento.trim()) {
-    throw new Error("Informe o nome do medicamento.");
+    throw new Error(
+      "Informe o nome do medicamento."
+    );
   }
 
   if (!medicamento.dosagem.trim()) {
-    throw new Error("Informe a dosagem.");
+    throw new Error(
+      "Informe a dosagem."
+    );
   }
 
-  return {
+  const dados: Record<string, unknown> = {
     nome: medicamento.medicamento.trim(),
     dose: medicamento.dosagem.trim(),
     quantidade: String(
       medicamento.quantidade ?? ""
     ).trim(),
-    horario: normalizarHorario(medicamento.horario),
+    horario: normalizarHorario(
+      medicamento.horario
+    ),
     frequencia: String(
       medicamento.frequencia ?? ""
     ).trim(),
     duracao: String(
       medicamento.duracao ?? ""
     ).trim(),
-    observacao: "",
-    ativo: true,
   };
+
+  // Os campos de estoque são opcionais.
+  // O campo antigo "quantidade" continua separado.
+
+  if (
+    medicamento.estoque_inicial !== undefined ||
+    medicamento.consumo_por_dose !== undefined
+  ) {
+    const estoque =
+      medicamento.estoque_inicial ?? null;
+
+    const consumo =
+      medicamento.consumo_por_dose ?? null;
+
+    if (
+      (estoque === null) !== (consumo === null)
+    ) {
+      throw new Error(
+        "Informe o estoque inicial e o consumo por dose juntos."
+      );
+    }
+
+    if (
+      estoque !== null &&
+      (!Number.isFinite(estoque) || estoque < 0)
+    ) {
+      throw new Error(
+        "O estoque inicial não pode ser negativo."
+      );
+    }
+
+    if (
+      consumo !== null &&
+      (!Number.isFinite(consumo) || consumo <= 0)
+    ) {
+      throw new Error(
+        "O consumo por dose deve ser maior que zero."
+      );
+    }
+
+    dados.estoque_inicial = estoque;
+    dados.consumo_por_dose = consumo;
+    dados.unidade_estoque =
+      medicamento.unidade_estoque?.trim() ||
+      "comprimido";
+  }
+
+  return dados;
 }
 
 // ======================================================
-// TRATAR ERROS DA API
+// ERROS DA API
 // ======================================================
 
 async function obterMensagemErro(
@@ -175,26 +300,36 @@ async function obterMensagemErro(
       return dados.message;
     }
 
-    if (typeof dados === "object" && dados !== null) {
+    if (typeof dados.mensagem === "string") {
+      return dados.mensagem;
+    }
+
+    if (
+      typeof dados === "object" &&
+      dados !== null
+    ) {
       return Object.entries(dados)
         .map(([campo, valor]) => {
           const mensagem = Array.isArray(valor)
             ? valor.join(", ")
-            : String(valor);
+            : typeof valor === "object" &&
+                valor !== null
+              ? JSON.stringify(valor)
+              : String(valor);
 
           return `${campo}: ${mensagem}`;
         })
         .join("\n");
     }
   } catch {
-    // Resposta não está em JSON.
+    // A resposta não está em JSON.
   }
 
   return texto.substring(0, 300);
 }
 
 // ======================================================
-// VALIDAR PERFIL E PACIENTE
+// VALIDAR PERFIL
 // ======================================================
 
 function validarOpcoes(
@@ -202,7 +337,10 @@ function validarOpcoes(
 ): PerfilMedicamentos {
   const perfil = opcoes.perfil;
 
-  if (perfil !== "idoso" && perfil !== "familiar") {
+  if (
+    perfil !== "idoso" &&
+    perfil !== "familiar"
+  ) {
     throw new Error(
       "Perfil não informado. Abra os medicamentos pela área do idoso ou do familiar."
     );
@@ -214,7 +352,7 @@ function validarOpcoes(
       (opcoes.pacienteId ?? 0) <= 0
     ) {
       throw new Error(
-        "Selecione um paciente vinculado antes de cadastrar ou consultar medicamentos."
+        "Selecione um paciente vinculado."
       );
     }
   }
@@ -223,7 +361,7 @@ function validarOpcoes(
 }
 
 // ======================================================
-// TOKEN DE CADA PERFIL
+// TOKEN DO PERFIL
 // ======================================================
 
 async function obterTokenDoPerfil(
@@ -260,7 +398,7 @@ async function fetchAutenticado(
   if (!token) {
     throw new Error(
       perfil === "idoso"
-        ? "A sessão do idoso não está ativa. Volte à tela do idoso e tente novamente."
+        ? "A sessão do idoso não está ativa."
         : "Faça login como familiar para continuar."
     );
   }
@@ -282,7 +420,7 @@ async function fetchAutenticado(
 
     if (!token) {
       throw new Error(
-        "Sua sessão expirou. Entre novamente no perfil."
+        "Sua sessão expirou. Entre novamente."
       );
     }
 
@@ -301,7 +439,6 @@ export async function adicionarMedicamento(
   opcoes: OpcoesMedicamentos
 ): Promise<Medicamento> {
   const perfil = validarOpcoes(opcoes);
-
   const dados = converterParaAPI(medicamento);
 
   const corpo =
@@ -322,14 +459,13 @@ export async function adicionarMedicamento(
   );
 
   if (!response.ok) {
-    const mensagem = await obterMensagemErro(response);
-
     throw new Error(
-      `Não foi possível cadastrar (${response.status}): ${mensagem}`
+      `Não foi possível cadastrar (${response.status}): ${await obterMensagemErro(response)}`
     );
   }
 
-  const resultado: MedicamentoAPI = await response.json();
+  const resultado: MedicamentoAPI =
+    await response.json();
 
   return converterDaAPI(resultado);
 }
@@ -355,7 +491,9 @@ export async function listarMedicamentos(
   );
 
   if (!response.ok) {
-    throw new Error(await obterMensagemErro(response));
+    throw new Error(
+      await obterMensagemErro(response)
+    );
   }
 
   const resultado = await response.json();
@@ -370,7 +508,7 @@ export async function listarMedicamentos(
 }
 
 // ======================================================
-// BUSCAR MEDICAMENTO PELO ID
+// BUSCAR MEDICAMENTO
 // ======================================================
 
 export async function buscarMedicamento(
@@ -390,10 +528,13 @@ export async function buscarMedicamento(
   }
 
   if (!response.ok) {
-    throw new Error(await obterMensagemErro(response));
+    throw new Error(
+      await obterMensagemErro(response)
+    );
   }
 
-  const resultado: MedicamentoAPI = await response.json();
+  const resultado: MedicamentoAPI =
+    await response.json();
 
   return converterDaAPI(resultado);
 }
@@ -409,7 +550,9 @@ export async function atualizarMedicamento(
 ): Promise<Medicamento | null> {
   const perfil = validarOpcoes(opcoes);
 
-  const dados = converterParaAPI(dadosAtualizados);
+  const dados = converterParaAPI(
+    dadosAtualizados
+  );
 
   const response = await fetchAutenticado(
     `${MEDICAMENTOS_URL}${encodeURIComponent(id)}/`,
@@ -425,10 +568,13 @@ export async function atualizarMedicamento(
   }
 
   if (!response.ok) {
-    throw new Error(await obterMensagemErro(response));
+    throw new Error(
+      await obterMensagemErro(response)
+    );
   }
 
-  const resultado: MedicamentoAPI = await response.json();
+  const resultado: MedicamentoAPI =
+    await response.json();
 
   return converterDaAPI(resultado);
 }
@@ -456,8 +602,65 @@ export async function excluirMedicamento(
   }
 
   if (!response.ok) {
-    throw new Error(await obterMensagemErro(response));
+    throw new Error(
+      await obterMensagemErro(response)
+    );
   }
 
   return true;
+}
+
+// ======================================================
+// REPOR ESTOQUE
+// ======================================================
+
+export async function reporEstoqueMedicamento(
+  id: string | number,
+  quantidade: number,
+  opcoes: OpcoesMedicamentos = {
+    perfil: "idoso",
+  }
+): Promise<Medicamento> {
+  const perfil = validarOpcoes(opcoes);
+
+  // Validação da quantidade
+  if (
+    !Number.isFinite(quantidade) ||
+    quantidade <= 0 ||
+    !Number.isInteger(
+      Math.round(quantidade * 100)
+    ) ||
+    Math.abs(
+      Math.round(quantidade * 100) / 100 -
+        quantidade
+    ) > 0.000000001
+  ) {
+    throw new Error(
+      "Informe uma quantidade válida, maior que zero, com até duas casas decimais."
+    );
+  }
+
+  const response = await fetchAutenticado(
+    `${MEDICAMENTOS_URL}${encodeURIComponent(String(id))}/repor-estoque/`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        quantidade,
+      }),
+    },
+    perfil
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Não foi possível repor o estoque (${response.status}): ${await obterMensagemErro(response)}`
+    );
+  }
+
+  const resultado: RespostaReposicaoAPI =
+    await response.json();
+
+  return converterDaAPI(
+    resultado.medicamento
+  );
 }
