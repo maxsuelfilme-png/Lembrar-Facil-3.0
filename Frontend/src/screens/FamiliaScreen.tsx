@@ -26,6 +26,7 @@ import {
 import {
   listarPacientesVinculados,
   vincularPaciente,
+  desvincularPaciente,
   type VinculoPaciente,
 } from "../services/vinculosService";
 
@@ -34,6 +35,7 @@ const CORES = {
   azul: "#2563EB",
   azulEscuro: "#0F2557",
   verde: "#16A34A",
+  vermelho: "#DC2626",
   texto: "#64748B",
   branco: "#FFFFFF",
 };
@@ -50,7 +52,14 @@ export default function FamiliaScreen() {
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [vinculando, setVinculando] = useState(false);
+  const [desvinculandoId, setDesvinculandoId] =
+    useState<number | null>(null);
+
   const [erro, setErro] = useState("");
+
+  // ======================================================
+  // CARREGAR DADOS
+  // ======================================================
 
   const carregar = useCallback(async () => {
     try {
@@ -81,6 +90,10 @@ export default function FamiliaScreen() {
       void carregar();
     }, [carregar])
   );
+
+  // ======================================================
+  // SALVAR FAMILIAR
+  // ======================================================
 
   async function salvar() {
     if (!nome.trim() || !telefone.trim()) {
@@ -117,6 +130,10 @@ export default function FamiliaScreen() {
       setSalvando(false);
     }
   }
+
+  // ======================================================
+  // VINCULAR IDOSO
+  // ======================================================
 
   async function confirmarVinculo() {
     const codigoLimpo = codigo.trim().toUpperCase();
@@ -157,6 +174,10 @@ export default function FamiliaScreen() {
     }
   }
 
+  // ======================================================
+  // NOME DO PACIENTE
+  // ======================================================
+
   function pacienteNome(v: VinculoPaciente): string {
     const nomePaciente = (v.paciente_nome || "").trim();
 
@@ -170,6 +191,63 @@ export default function FamiliaScreen() {
 
     return `Idoso #${v.paciente}`;
   }
+
+  // ======================================================
+  // EXCLUIR VÍNCULO
+  // ======================================================
+
+  function confirmarDesvinculo(v: VinculoPaciente) {
+    Alert.alert(
+      "Excluir vínculo",
+      `Deseja realmente desvincular ${pacienteNome(v)}?\n\n` +
+        "O cadastro e os medicamentos do idoso não serão apagados.",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
+        {
+          text: "Desvincular",
+          style: "destructive",
+          onPress: () => void executarDesvinculo(v.id),
+        },
+      ]
+    );
+  }
+
+  async function executarDesvinculo(vinculoId: number) {
+    if (desvinculandoId !== null) {
+      return;
+    }
+
+    try {
+      setDesvinculandoId(vinculoId);
+
+      await desvincularPaciente(vinculoId);
+
+      setVinculos((listaAtual) =>
+        listaAtual.filter((v) => v.id !== vinculoId)
+      );
+
+      Alert.alert(
+        "Vínculo removido 💚",
+        "O idoso foi desvinculado com sucesso."
+      );
+    } catch (e) {
+      Alert.alert(
+        "Erro ao desvincular",
+        e instanceof Error
+          ? e.message
+          : "Não foi possível remover o vínculo."
+      );
+    } finally {
+      setDesvinculandoId(null);
+    }
+  }
+
+  // ======================================================
+  // ABRIR MEDICAMENTOS
+  // ======================================================
 
   function abrirMedicamentos(id: number) {
     if (!Number.isInteger(id) || id <= 0) {
@@ -200,7 +278,9 @@ export default function FamiliaScreen() {
     >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={
+          Platform.OS === "ios" ? "padding" : undefined
+        }
       >
         <ScrollView
           contentContainerStyle={styles.content}
@@ -216,7 +296,9 @@ export default function FamiliaScreen() {
               size={24}
               color={CORES.azul}
             />
-            <Text style={styles.voltarTexto}>Voltar</Text>
+            <Text style={styles.voltarTexto}>
+              Voltar
+            </Text>
           </TouchableOpacity>
 
           <Text style={styles.titulo}>
@@ -239,6 +321,7 @@ export default function FamiliaScreen() {
               <Text style={styles.heroTitulo}>
                 Cuidando de quem você ama
               </Text>
+
               <Text style={styles.texto}>
                 Compartilhe a rotina de medicamentos
                 com segurança.
@@ -275,7 +358,9 @@ export default function FamiliaScreen() {
               </Text>
 
               <View style={styles.card}>
-                <Text style={styles.label}>Nome</Text>
+                <Text style={styles.label}>
+                  Nome
+                </Text>
 
                 <TextInput
                   style={styles.input}
@@ -426,6 +511,34 @@ export default function FamiliaScreen() {
                         💊 VER MEDICAMENTOS
                       </Text>
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.botaoExcluir,
+                        desvinculandoId === v.id &&
+                          styles.desabilitado,
+                      ]}
+                      disabled={desvinculandoId !== null}
+                      onPress={() => confirmarDesvinculo(v)}
+                    >
+                      {desvinculandoId === v.id ? (
+                        <ActivityIndicator
+                          color={CORES.vermelho}
+                        />
+                      ) : (
+                        <>
+                          <Ionicons
+                            name="trash-outline"
+                            size={20}
+                            color={CORES.vermelho}
+                          />
+
+                          <Text style={styles.botaoExcluirTexto}>
+                            EXCLUIR VÍNCULO
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
                   </View>
                 ))
               )}
@@ -448,6 +561,7 @@ export default function FamiliaScreen() {
                   <Text style={styles.cardTitulo}>
                     Rotina de hoje
                   </Text>
+
                   <Text style={styles.texto}>
                     Veja horários e confirmações
                     dos medicamentos.
@@ -472,6 +586,7 @@ export default function FamiliaScreen() {
                   <Text style={styles.cardTitulo}>
                     Alertas
                   </Text>
+
                   <Text style={styles.texto}>
                     Avisos automáticos dependem da
                     configuração do serviço.
@@ -491,7 +606,9 @@ export default function FamiliaScreen() {
 
               <TouchableOpacity
                 style={styles.opcao}
-                onPress={() => router.push("/farmacias-busca")}
+                onPress={() =>
+                  router.push("/farmacias-busca")
+                }
               >
                 <Ionicons
                   name="search-outline"
@@ -503,6 +620,7 @@ export default function FamiliaScreen() {
                   <Text style={styles.cardTitulo}>
                     Encontrar farmácias
                   </Text>
+
                   <Text style={styles.texto}>
                     Pesquise medicamentos e compare preços.
                   </Text>
@@ -517,7 +635,9 @@ export default function FamiliaScreen() {
 
               <TouchableOpacity
                 style={styles.opcao}
-                onPress={() => router.push("/farmacias-mapa")}
+                onPress={() =>
+                  router.push("/farmacias-mapa")
+                }
               >
                 <Ionicons
                   name="map-outline"
@@ -529,6 +649,7 @@ export default function FamiliaScreen() {
                   <Text style={styles.cardTitulo}>
                     Ver farmácias no mapa
                   </Text>
+
                   <Text style={styles.texto}>
                     Localize farmácias parceiras.
                   </Text>
@@ -557,6 +678,7 @@ export default function FamiliaScreen() {
                   <Text style={styles.cardTitulo}>
                     Reposição de medicamentos
                   </Text>
+
                   <Text style={styles.texto}>
                     Acompanhe estoque e solicitações.
                   </Text>
@@ -721,6 +843,25 @@ const styles = StyleSheet.create({
 
   botaoTexto: {
     color: CORES.branco,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+
+  botaoExcluir: {
+    minHeight: 52,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: CORES.vermelho,
+    backgroundColor: "#FFF7F7",
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+  },
+
+  botaoExcluirTexto: {
+    color: CORES.vermelho,
     fontSize: 15,
     fontWeight: "900",
   },

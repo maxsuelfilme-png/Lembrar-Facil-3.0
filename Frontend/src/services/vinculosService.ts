@@ -5,10 +5,6 @@ import {
   obterTokenValidoIdoso,
 } from "./authService";
 
-// ======================================================
-// TIPOS
-// ======================================================
-
 export type VinculoPaciente = {
   id: number;
   paciente: number;
@@ -29,23 +25,15 @@ export type RespostaCodigoVinculo = {
   detail?: string;
 };
 
-// ======================================================
-// URL DO BACKEND
-// ======================================================
-
 const CUIDADORES_URL =
   `${API_URL.replace(/\/+$/, "")}/cuidadores`;
 
-// ======================================================
-// TRATAR RESPOSTA DO DJANGO
-// ======================================================
+async function lerResposta(resposta: Response): Promise<any> {
+  if (resposta.status === 204) {
+    return {};
+  }
 
-async function lerResposta(
-  resposta: Response
-): Promise<any> {
-  const dados = await resposta
-    .json()
-    .catch(() => ({}));
+  const dados = await resposta.json().catch(() => ({}));
 
   if (!resposta.ok) {
     const mensagem =
@@ -64,10 +52,6 @@ async function lerResposta(
 
   return dados;
 }
-
-// ======================================================
-// REQUISIÇÕES DO FAMILIAR
-// ======================================================
 
 async function requisicaoFamiliar(
   caminho: string,
@@ -96,10 +80,6 @@ async function requisicaoFamiliar(
   return lerResposta(resposta);
 }
 
-// ======================================================
-// REQUISIÇÕES DO IDOSO
-// ======================================================
-
 async function requisicaoIdoso(
   caminho: string,
   opcoes: RequestInit = {}
@@ -127,10 +107,6 @@ async function requisicaoIdoso(
   return lerResposta(resposta);
 }
 
-// ======================================================
-// GERAR CÓDIGO NA TELA DO IDOSO
-// ======================================================
-
 export async function gerarCodigoVinculoIdoso():
   Promise<RespostaCodigoVinculo> {
   const dados = await requisicaoIdoso(
@@ -157,16 +133,10 @@ export async function gerarCodigoVinculoIdoso():
   };
 }
 
-// ======================================================
-// VINCULAR IDOSO NA TELA FAMÍLIA
-// ======================================================
-
 export async function vincularPaciente(
   codigo: string
 ): Promise<RespostaVinculo> {
-  const codigoLimpo = codigo
-    .trim()
-    .toUpperCase();
+  const codigoLimpo = codigo.trim().toUpperCase();
 
   if (!/^[A-F0-9]{16}$/.test(codigoLimpo)) {
     throw new Error(
@@ -185,15 +155,9 @@ export async function vincularPaciente(
   );
 }
 
-// ======================================================
-// LISTAR IDOSOS VINCULADOS AO FAMILIAR
-// ======================================================
-
 export async function listarPacientesVinculados():
   Promise<VinculoPaciente[]> {
-  const dados = await requisicaoFamiliar(
-    "vinculos/"
-  );
+  const dados = await requisicaoFamiliar("vinculos/");
 
   if (Array.isArray(dados)) {
     return dados;
@@ -204,4 +168,24 @@ export async function listarPacientesVinculados():
   }
 
   return [];
+}
+
+// Desvincula o idoso da conta do familiar.
+// Requer a rota DELETE no backend Django.
+export async function desvincularPaciente(
+  vinculoId: number
+): Promise<void> {
+  if (
+    !Number.isInteger(vinculoId) ||
+    vinculoId <= 0
+  ) {
+    throw new Error("Vínculo inválido.");
+  }
+
+  await requisicaoFamiliar(
+    `vinculos/${vinculoId}/`,
+    {
+      method: "DELETE",
+    }
+  );
 }
