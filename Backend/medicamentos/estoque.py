@@ -44,58 +44,61 @@ def calcular_estoque_medicamento(medicamento):
 
     doses_tomadas = confirmacoes.count()
 
-    consumo_total = (
-        Decimal(doses_tomadas) * consumo_por_dose
-    )
+    consumo_total = Decimal(doses_tomadas) * consumo_por_dose
 
     estoque_restante = max(
         Decimal("0"),
         estoque_inicial - consumo_total,
     )
 
-    doses_restantes = (
-        estoque_restante / consumo_por_dose
-    )
+    doses_restantes = estoque_restante / consumo_por_dose
 
     horarios_ativos = medicamento.horarios.filter(
         ativo=True
     ).count()
 
-    # Por segurança, não estimar autonomia sem horários.
-    if horarios_ativos <= 0:
-        dias_restantes = None
-        alerta_estoque = False
-    else:
-        # Esta estimativa só é válida para uso diário.
-        frequencia = medicamento.frequencia.strip().lower()
+    dias_restantes = None
+    alerta_estoque = False
 
-        frequencias_diarias = {
-            "diário",
-            "diaria",
-            "diária",
-            "diario",
-            "todos os dias",
-            "1 vez ao dia",
-            "2 vezes ao dia",
-            "3 vezes ao dia",
-        }
+    frequencia = str(medicamento.frequencia or "").strip().lower()
 
-        if frequencia not in frequencias_diarias:
-            dias_restantes = None
-            alerta_estoque = False
-        else:
-            dias_restantes_decimal = (
-                doses_restantes / Decimal(horarios_ativos)
-            )
+    frequencias_diarias = {
+        "diário",
+        "diaria",
+        "diária",
+        "diario",
+        "todos os dias",
+        "1",
+        "2",
+        "3",
+        "4",
+        "1 vez",
+        "2 vezes",
+        "3 vezes",
+        "4 vezes",
+        "1 vez ao dia",
+        "2 vezes ao dia",
+        "3 vezes ao dia",
+        "4 vezes ao dia",
+        "24/24 horas",
+        "12/12 horas",
+        "8/8 horas",
+        "6/6 horas",
+    }
 
-            dias_restantes = round(
-                float(dias_restantes_decimal),
-                1,
-            )
+    if horarios_ativos > 0 and frequencia in frequencias_diarias:
+        dias_restantes_decimal = (
+            doses_restantes / Decimal(horarios_ativos)
+        )
 
-            alerta_estoque = (
-                dias_restantes_decimal <= LIMITE_ALERTA_DIAS
-            )
+        dias_restantes = round(
+            float(dias_restantes_decimal),
+            1,
+        )
+
+        alerta_estoque = (
+            dias_restantes_decimal <= LIMITE_ALERTA_DIAS
+        )
 
     return {
         "configurado": True,
