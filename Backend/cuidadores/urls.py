@@ -9,6 +9,10 @@ from .views import (
     VincularPacienteView,
 )
 
+# ======================================================
+# ROTAS AUTOMÁTICAS DOS VÍNCULOS
+# ======================================================
+
 router = DefaultRouter()
 
 router.register(
@@ -16,6 +20,10 @@ router.register(
     VinculoCuidadorPacienteViewSet,
     basename="vinculos-cuidador",
 )
+
+# ======================================================
+# ROTAS DO FAMILIAR E DO IDOSO
+# ======================================================
 
 urlpatterns = [
     path(

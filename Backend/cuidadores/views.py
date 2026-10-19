@@ -2,7 +2,12 @@
 from django.db import transaction
 from django.utils import timezone
 
-from rest_framework import generics, viewsets, status
+from rest_framework import (
+    generics,
+    viewsets,
+    status,
+    mixins,
+)
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -46,14 +51,21 @@ class MeuPerfilCuidadorView(
 
 
 # ======================================================
-# LISTAR PACIENTES VINCULADOS
+# LISTAR E EXCLUIR VÍNCULOS DO FAMILIAR
 # ======================================================
 
 class VinculoCuidadorPacienteViewSet(
-    viewsets.ReadOnlyModelViewSet
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
 ):
     serializer_class = VinculoCuidadorPacienteSerializer
     permission_classes = [IsAuthenticated]
+
+    # ==================================================
+    # LISTAR APENAS VÍNCULOS ATIVOS DO FAMILIAR
+    # ==================================================
 
     def get_queryset(self):
         return (
@@ -63,6 +75,26 @@ class VinculoCuidadorPacienteViewSet(
             )
             .select_related("paciente")
             .order_by("-criado_em")
+        )
+
+    # ==================================================
+    # EXCLUIR VÍNCULO SEM APAGAR O PACIENTE
+    # ==================================================
+
+    def destroy(self, request, *args, **kwargs):
+        vinculo = self.get_object()
+
+        # Desativa o vínculo em vez de apagar o registro.
+        vinculo.ativo = False
+        vinculo.save(update_fields=["ativo"])
+
+        return Response(
+            {
+                "detail": (
+                    "Vínculo removido com sucesso."
+                )
+            },
+            status=status.HTTP_200_OK,
         )
 
 
@@ -92,13 +124,13 @@ class GerarCodigoVinculoView(APIView):
 
         with transaction.atomic():
 
-            # Invalida códigos anteriores não utilizados
+            # Invalida códigos anteriores não utilizados.
             CodigoVinculo.objects.filter(
                 paciente=paciente,
                 utilizado=False,
             ).update(utilizado=True)
 
-            # Gera um novo código
+            # Gera um novo código.
             novo_codigo = CodigoVinculo.objects.create(
                 paciente=paciente
             )
@@ -123,27 +155,23 @@ class VincularPacienteView(APIView):
     def post(self, request):
 
         # ==================================================
-        # DIAGNÓSTICO TEMPORÁRIO DA CONTA AUTENTICADA
+        # IDENTIFICAR TIPO DE CONTA
         # ==================================================
 
         eh_paciente = Paciente.objects.filter(
             usuario=request.user
         ).exists()
 
-        eh_familiar = Cuidador.objects.filter(
-            usuario=request.user
-        ).exists()
-
-        print(
-            "DIAGNOSTICO VINCULO:",
-            {
-                "usuario_id": request.user.id,
-                "username": request.user.username,
-                "eh_paciente": eh_paciente,
-                "eh_familiar": eh_familiar,
-            },
-            flush=True,
-        )
+        if eh_paciente:
+            return Response(
+                {
+                    "detail": (
+                        "Utilize uma conta de familiar "
+                        "para realizar o vínculo."
+                    )
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         # ==================================================
         # VALIDAR CÓDIGO
@@ -151,7 +179,10 @@ class VincularPacienteView(APIView):
 
         codigo = request.data.get("codigo")
 
-        if not isinstance(codigo, str) or not codigo.strip():
+        if (
+            not isinstance(codigo, str)
+            or not codigo.strip()
+        ):
             return Response(
                 {
                     "detail": (
@@ -163,27 +194,20 @@ class VincularPacienteView(APIView):
 
         codigo = codigo.strip().upper()
 
-        if len(codigo) != 16:
-            return Response(
-                {
-                    "detail": "Código inválido ou expirado."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
+        if (
+            len(codigo) != 16
+            or any(
+                caractere not in "ABCDEF0123456789"
+                for caractere in codigo
             )
-
-        # ==================================================
-        # IMPEDIR VÍNCULO USANDO CONTA DE PACIENTE
-        # ==================================================
-
-        if eh_paciente:
+        ):
             return Response(
                 {
                     "detail": (
-                        "Utilize uma conta de familiar "
-                        "para realizar o vínculo."
+                        "Código inválido ou expirado."
                     )
                 },
-                status=status.HTTP_403_FORBIDDEN,
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         # ==================================================
@@ -214,9 +238,9 @@ class VincularPacienteView(APIView):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # ==============================================
+            # ==================================================
             # OBTER OU CRIAR PERFIL DO FAMILIAR
-            # ==============================================
+            # ==================================================
 
             cuidador, criado = Cuidador.objects.get_or_create(
                 usuario=request.user,
@@ -228,9 +252,9 @@ class VincularPacienteView(APIView):
                 },
             )
 
-            # ==============================================
-            # CRIAR VÍNCULO COM O IDOSO
-            # ==============================================
+            # ==================================================
+            # CRIAR OU REATIVAR VÍNCULO
+            # ==================================================
 
             vinculo, criado = (
                 VinculoCuidadorPaciente.objects.get_or_create(
@@ -242,14 +266,16 @@ class VincularPacienteView(APIView):
                 )
             )
 
-            # Reativa um vínculo existente, se necessário
             if not vinculo.ativo:
                 vinculo.ativo = True
                 vinculo.save(
                     update_fields=["ativo"]
                 )
 
-            # Código não pode ser reutilizado
+            # ==================================================
+            # MARCAR CÓDIGO COMO UTILIZADO
+            # ==================================================
+
             codigo_vinculo.utilizado = True
             codigo_vinculo.save(
                 update_fields=["utilizado"]
