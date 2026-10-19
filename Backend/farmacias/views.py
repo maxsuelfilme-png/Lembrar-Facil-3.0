@@ -1,7 +1,10 @@
 
 from rest_framework import generics, viewsets, serializers
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.exceptions import PermissionDenied, AuthenticationFailed
+from rest_framework.exceptions import (
+    PermissionDenied,
+    AuthenticationFailed,
+)
 
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -141,13 +144,42 @@ class CatalogoProdutoSerializer(serializers.ModelSerializer):
         read_only=True
     )
 
+    farmacia_endereco = serializers.CharField(
+        source="farmacia.endereco",
+        read_only=True
+    )
+
+    farmacia_telefone = serializers.CharField(
+        source="farmacia.telefone",
+        read_only=True
+    )
+
+    farmacia_whatsapp = serializers.CharField(
+        source="farmacia.whatsapp",
+        read_only=True
+    )
+
     farmacia_faz_entrega = serializers.BooleanField(
         source="farmacia.faz_entrega",
         read_only=True
     )
 
+    farmacia_horario_funcionamento = serializers.CharField(
+        source="farmacia.horario_funcionamento",
+        read_only=True
+    )
+
+    farmacia_taxa_entrega = serializers.DecimalField(
+        source="farmacia.taxa_entrega",
+        max_digits=10,
+        decimal_places=2,
+        read_only=True,
+        allow_null=True
+    )
+
     class Meta:
         model = ProdutoFarmacia
+
         fields = [
             "id",
             "nome",
@@ -157,7 +189,12 @@ class CatalogoProdutoSerializer(serializers.ModelSerializer):
             "farmacia_nome",
             "farmacia_cidade",
             "farmacia_estado",
+            "farmacia_endereco",
+            "farmacia_telefone",
+            "farmacia_whatsapp",
             "farmacia_faz_entrega",
+            "farmacia_horario_funcionamento",
+            "farmacia_taxa_entrega",
         ]
 
 
@@ -197,6 +234,7 @@ class FarmaciasMapaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Farmacia
+
         fields = [
             "id",
             "nome",
