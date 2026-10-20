@@ -1,6 +1,5 @@
 
 import React, { useCallback, useState } from "react";
-
 import {
   ActivityIndicator,
   Alert,
@@ -30,6 +29,30 @@ import {
   type VinculoPaciente,
 } from "../services/vinculosService";
 
+// ======================================================
+// TELEFONE BRASILEIRO
+// ======================================================
+
+const PREFIXO_BRASIL = "55";
+
+function telefoneLocal(valor: string): string {
+  let numeros = String(valor || "").replace(/\D/g, "");
+
+  if (numeros.length > 11 && numeros.startsWith("55")) {
+    numeros = numeros.slice(2);
+  }
+
+  return numeros.slice(0, 11);
+}
+
+function telefoneParaApi(valor: string): string {
+  return PREFIXO_BRASIL + telefoneLocal(valor);
+}
+
+// ======================================================
+// CORES
+// ======================================================
+
 const CORES = {
   fundo: "#F8FBFF",
   azul: "#2563EB",
@@ -39,6 +62,10 @@ const CORES = {
   texto: "#64748B",
   branco: "#FFFFFF",
 };
+
+// ======================================================
+// TELA FAMÍLIA
+// ======================================================
 
 export default function FamiliaScreen() {
   const router = useRouter();
@@ -72,7 +99,10 @@ export default function FamiliaScreen() {
       ]);
 
       setNome(cuidador.nome || "");
-      setTelefone(cuidador.telefone || "");
+
+      // Remove o +55 da exibição, caso já esteja salvo.
+      setTelefone(telefoneLocal(cuidador.telefone || ""));
+
       setVinculos(lista);
     } catch (e) {
       setErro(
@@ -104,16 +134,30 @@ export default function FamiliaScreen() {
       return;
     }
 
+    const numeroLocal = telefoneLocal(telefone);
+
+    if (!/^[1-9][0-9]9[0-9]{8}$/.test(numeroLocal)) {
+      Alert.alert(
+        "Telefone inválido",
+        "Informe um celular brasileiro válido com DDD e 9 dígitos.\n\nExemplo: 81999999999"
+      );
+      return;
+    }
+
     try {
       setSalvando(true);
 
+      // Envia automaticamente o código 55 junto ao telefone.
       const atualizado = await atualizarMeuCuidador(
         nome.trim(),
-        telefone.trim()
+        telefoneParaApi(numeroLocal)
       );
 
       setNome(atualizado.nome || "");
-      setTelefone(atualizado.telefone || "");
+
+      setTelefone(
+        telefoneLocal(atualizado.telefone || numeroLocal)
+      );
 
       Alert.alert(
         "Sucesso 💚",
@@ -271,6 +315,10 @@ export default function FamiliaScreen() {
     (v) => v.ativo !== false
   );
 
+  // ======================================================
+  // INTERFACE
+  // ======================================================
+
   return (
     <SafeAreaView
       style={styles.container}
@@ -287,6 +335,8 @@ export default function FamiliaScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {/* VOLTAR */}
+
           <TouchableOpacity
             style={styles.voltar}
             onPress={() => router.back()}
@@ -296,10 +346,13 @@ export default function FamiliaScreen() {
               size={24}
               color={CORES.azul}
             />
+
             <Text style={styles.voltarTexto}>
               Voltar
             </Text>
           </TouchableOpacity>
+
+          {/* TÍTULO */}
 
           <Text style={styles.titulo}>
             Área da família 💚
@@ -309,6 +362,8 @@ export default function FamiliaScreen() {
             Cuide de quem você ama, acompanhe medicamentos
             e mantenha seus dados atualizados.
           </Text>
+
+          {/* DESTAQUE */}
 
           <View style={styles.hero}>
             <MaterialCommunityIcons
@@ -353,6 +408,8 @@ export default function FamiliaScreen() {
                 </View>
               )}
 
+              {/* FAMILIAR RESPONSÁVEL */}
+
               <Text style={styles.secao}>
                 Familiar responsável
               </Text>
@@ -374,18 +431,32 @@ export default function FamiliaScreen() {
                   Telefone / WhatsApp
                 </Text>
 
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ex.: 81999999999"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="phone-pad"
-                  value={telefone}
-                  onChangeText={setTelefone}
-                />
+                {/* CAMPO COM +55 FIXO */}
+
+                <View style={styles.telefoneLinha}>
+                  <View style={styles.prefixoContainer}>
+                    <Text style={styles.prefixoTexto}>
+                      🇧🇷 +55
+                    </Text>
+                  </View>
+
+                  <TextInput
+                    style={styles.telefoneInput}
+                    placeholder="(81) 99999-9999"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="phone-pad"
+                    value={telefone}
+                    onChangeText={(valor) =>
+                      setTelefone(telefoneLocal(valor))
+                    }
+                    maxLength={11}
+                  />
+                </View>
 
                 <Text style={styles.ajuda}>
-                  Este número poderá ser utilizado
-                  para receber alertas.
+                  O código +55 já está incluído.
+                  Digite apenas o DDD e o celular.
+                  Este número poderá receber alertas.
                 </Text>
 
                 <TouchableOpacity
@@ -405,6 +476,8 @@ export default function FamiliaScreen() {
                   )}
                 </TouchableOpacity>
               </View>
+
+              {/* VINCULAR IDOSO */}
 
               <Text style={styles.secao}>
                 Vincular um idoso
@@ -465,6 +538,8 @@ export default function FamiliaScreen() {
                   )}
                 </TouchableOpacity>
               </View>
+
+              {/* IDOSOS VINCULADOS */}
 
               <Text style={styles.secao}>
                 Idosos vinculados
@@ -543,6 +618,8 @@ export default function FamiliaScreen() {
                 ))
               )}
 
+              {/* ACOMPANHAMENTO */}
+
               <Text style={styles.secao}>
                 Acompanhamento
               </Text>
@@ -593,6 +670,8 @@ export default function FamiliaScreen() {
                   </Text>
                 </View>
               </View>
+
+              {/* FARMÁCIAS */}
 
               <Text style={styles.secao}>
                 Farmácias e medicamentos
@@ -691,6 +770,8 @@ export default function FamiliaScreen() {
                 />
               </TouchableOpacity>
 
+              {/* RODAPÉ */}
+
               <View style={styles.rodape}>
                 <Text style={styles.rodapeTexto}>
                   🛡️ Cuidado e segurança 💚
@@ -705,6 +786,10 @@ export default function FamiliaScreen() {
     </SafeAreaView>
   );
 }
+
+// ======================================================
+// ESTILOS
+// ======================================================
 
 const styles = StyleSheet.create({
   container: {
@@ -801,6 +886,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     fontSize: 16,
     marginBottom: 12,
+    color: "#0F172A",
+  },
+
+  // CAMPO DE TELEFONE COM +55
+
+  telefoneLinha: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  prefixoContainer: {
+    minHeight: 55,
+    paddingHorizontal: 12,
+    backgroundColor: "#E8F9EE",
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  prefixoTexto: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: CORES.azulEscuro,
+  },
+
+  telefoneInput: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 55,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 15,
+    paddingHorizontal: 12,
+    fontSize: 16,
     color: "#0F172A",
   },
 
