@@ -77,9 +77,17 @@ export type ProdutoCatalogoFarmacia = {
   descricao: string;
   preco: string;
   quantidade_estoque: number;
+
   farmacia_nome: string;
   farmacia_cidade: string;
   farmacia_estado: string;
+
+  farmacia_endereco: string;
+  farmacia_telefone: string;
+  farmacia_whatsapp: string;
+  farmacia_horario_funcionamento: string;
+  farmacia_taxa_entrega: string | null;
+
   farmacia_faz_entrega: boolean;
 };
 

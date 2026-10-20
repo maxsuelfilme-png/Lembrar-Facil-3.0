@@ -1,155 +1,170 @@
-# 💚 LembraFácil 3.0
+# 💙💚 LembraFácil 3.0
 
-### Sistema de Gerenciamento de Medicamentos e Alertas Automáticos
+### Tecnologia que cuida de vidas
 
-O **LembraFácil** é um aplicativo desenvolvido para auxiliar pessoas idosas e seus familiares na organização e no acompanhamento de medicamentos.
+O **LembraFácil** é um projeto de tecnologia desenvolvido para auxiliar pessoas idosas na organização e no acompanhamento de seus medicamentos, promovendo mais autonomia, segurança e tranquilidade para seus familiares e cuidadores.
 
-O sistema permite cadastrar medicamentos, organizar horários, acompanhar a rotina e enviar alertas automáticos pelo WhatsApp ao familiar responsável quando uma dose não é confirmada no horário previsto.
+O projeto reúne um aplicativo mobile, uma API backend e um portal web para farmácias parceiras.
 
-## 🚀 Funcionalidades
+## 🌐 Portal Web das Farmácias
 
-- Cadastro e autenticação de usuários com JWT.
-- Cadastro, edição, consulta e exclusão de medicamentos.
-- Registro de dosagem, quantidade, horário, frequência e duração.
-- Leitura de receitas médicas com auxílio de OCR e revisão dos dados identificados.
-- Tela de acompanhamento da rotina de medicamentos.
-- Cadastro do nome e WhatsApp do familiar responsável.
-- Armazenamento dos dados em banco PostgreSQL.
-- Identificação automática de medicamentos atrasados.
-- Envio automático de alertas pelo WhatsApp Business Cloud API.
-- Acesso ao backend hospedado online no Railway.
+**Acesse o portal publicado:**
 
-## 📲 Alertas automáticos pelo WhatsApp
+https://lembrafacil-farmacias.vercel.app
 
-O LembraFácil possui integração com a API oficial do WhatsApp da Meta.
+O Portal Web LembraFácil permite que farmácias parceiras gerenciem seus medicamentos e mantenham seus dados atualizados.
 
-**Funcionamento:**
+### Funcionalidades do portal
 
-1. O usuário cadastra um medicamento e seu horário.
-2. Na tela Família, informa o nome e o WhatsApp do familiar responsável.
-3. O Django armazena o contato no banco de dados.
-4. O sistema verifica periodicamente os horários dos medicamentos.
-5. Quando uma dose ultrapassa a tolerância configurada sem confirmação, o sistema registra o atraso.
-6. O backend consulta o WhatsApp do familiar e solicita o envio de uma mensagem automática.
+- Login de farmácias com autenticação.
+- Painel administrativo com indicadores.
+- Cadastro, edição e exclusão de medicamentos.
+- Consulta de preços e quantidades em estoque.
+- Identificação de medicamentos com estoque baixo.
+- Atualização dos dados da farmácia.
+- Configuração de informações de entrega.
+- Interface responsiva para computadores e celulares.
 
-**Exemplo de mensagem:**
+## 📱 Aplicativo Mobile
 
-> Alerta de medicamento
->
-> O medicamento Teste, previsto para 16:42, ainda não foi confirmado como tomado. Por favor, verifique a rotina do paciente.
+O aplicativo foi desenvolvido com **React Native, Expo e TypeScript**.
 
-**Status da integração:** envio e recebimento de mensagens validados em ambiente de testes da Meta. Nessa modalidade, os destinatários precisam estar autorizados. O uso com familiares em geral depende da configuração de produção da API.
+### Principais funcionalidades
+
+- Cadastro e autenticação de usuários.
+- Cadastro e gerenciamento de medicamentos.
+- Registro de dosagens, horários e frequência.
+- Leitura de receitas médicas com OCR.
+- Revisão das informações identificadas na receita.
+- Organização da rotina de medicamentos.
+- Cadastro de contato familiar ou cuidador.
+- Alertas de atraso de medicação via WhatsApp.
+- Consulta de medicamentos em farmácias parceiras.
+
+O objetivo é facilitar o acompanhamento da medicação e contribuir para uma rotina de cuidados mais organizada.
+
+## 🧠 Backend e API
+
+O backend do LembraFácil foi desenvolvido com **Python, Django e Django REST Framework**.
+
+### Responsabilidades
+
+- Gerenciamento de usuários e autenticação JWT.
+- Cadastro e consulta de medicamentos.
+- Controle de horários e confirmações de doses.
+- Gerenciamento de pacientes e cuidadores.
+- Gerenciamento de farmácias parceiras.
+- Cadastro e controle de produtos das farmácias.
+- Integração com a API oficial do WhatsApp.
+- Processamento de rotinas automatizadas.
+
+A API está hospedada no **Railway**, utilizando **PostgreSQL** como banco de dados.
 
 ## 🛠️ Tecnologias utilizadas
 
-| Componente | Tecnologia |
+| Camada | Tecnologias |
 |---|---|
-| Frontend | React Native, Expo e TypeScript |
-| Backend | Python, Django e Django REST Framework |
+| Aplicativo mobile | React Native, Expo, TypeScript |
+| Portal Web | React, Vite, TypeScript, CSS |
+| Backend | Python, Django, Django REST Framework |
 | Autenticação | JWT |
 | Banco de dados | PostgreSQL |
-| Hospedagem | Railway |
-| Automação | APScheduler |
-| Mensagens | WhatsApp Business Cloud API |
-| Leitura de receitas | OCR |
+| Reconhecimento de receitas | OCR.space |
+| Notificações | WhatsApp Cloud API |
+| Hospedagem da API | Railway |
+| Hospedagem do portal | Vercel |
 | Versionamento | Git e GitHub |
 
 ## 📂 Estrutura do projeto
 
 ```text
-Lembra-Facil/
+Lembrar-Facil-3.0/
+│
 ├── Backend/
-│   ├── config/
-│   ├── medicamentos/
-│   ├── horarios/
-│   ├── confirmacoes/
-│   ├── pacientes/
-│   ├── cuidadores/
-│   ├── usuarios/
-│   ├── receitas/
-│   ├── whatsapp.py
-│   └── manage.py
+│   └── API Django REST
 │
 ├── Frontend/
-│   ├── app/
-│   ├── src/
-│   │   ├── screens/
-│   │   └── services/
-│   └── package.json
+│   └── Aplicativo React Native + Expo
+│
+├── WebFarmacia/
+│   └── Portal Web React + Vite
 │
 └── README.md
 ```
 
-## 💻 Como executar o projeto
+## 🚀 Como executar o projeto
 
-### Backend
+### Backend Django
 
-Entre na pasta `Backend`, crie e ative um ambiente virtual e instale as dependências:
-
-```bash
-python -m venv venv
-```
-
-No Windows:
-
-```powershell
-venv\Scripts\activate
-```
-
-Depois:
+Acesse a pasta do backend, prepare o ambiente Python, instale as dependências conforme a configuração do projeto e execute:
 
 ```bash
-pip install -r requirements.txt
 python manage.py migrate
 python manage.py runserver
 ```
 
-É necessário configurar previamente as variáveis de ambiente e o banco de dados.
+As variáveis de ambiente necessárias devem ser configuradas localmente. Não publique tokens ou credenciais.
 
-### Frontend
-
-Entre na pasta `Frontend`:
+### Aplicativo Mobile
 
 ```bash
+cd Frontend
 npm install
 npx expo start
 ```
 
-Abra o aplicativo pelo Expo Go ou por uma versão de desenvolvimento compatível.
+### Portal Web das Farmácias
 
-## ☁️ Backend online
+```bash
+cd WebFarmacia
+npm install
+npm run dev
+```
 
-O backend está hospedado no Railway:
+Para gerar a versão de produção:
 
-https://lembrar-facil-30-production.up.railway.app
+```bash
+npm run build
+```
 
-O aplicativo utiliza uma API REST para comunicação com o banco de dados e autenticação dos usuários.
+## 🏥 Integração com farmácias
+
+O LembraFácil permite que usuários consultem a disponibilidade de medicamentos cadastrados pelas farmácias parceiras.
+
+O contato para compra é realizado diretamente com o estabelecimento.
+
+O projeto não realiza pagamentos ou vendas de medicamentos dentro do aplicativo.
 
 ## 🔐 Segurança
 
-- Autenticação por tokens JWT.
-- Dados de medicamentos associados aos respectivos usuários.
-- Rotas protegidas por autenticação.
-- Credenciais da Meta e do banco de dados configuradas por variáveis de ambiente.
-- Tokens, senhas e arquivos `.env` não devem ser publicados no GitHub.
+- Autenticação com JWT.
+- Proteção de endpoints de usuários autenticados.
+- Controle de acesso às informações da farmácia.
+- Comunicação com serviços publicados via HTTPS.
+- Variáveis de ambiente para configurações sensíveis.
 
-## 📌 Situação atual do projeto
+**Atenção:** não incluir senhas, tokens ou arquivos `.env` no repositório público.
 
-**Funcionalidades implementadas e testadas:**
+## 🎯 Objetivo do projeto
 
-- Cadastro e consulta de medicamentos.
-- Cadastro do contato familiar.
-- Backend online com PostgreSQL.
-- Identificação de atrasos.
-- Recebimento de alertas automáticos no WhatsApp de teste.
+Utilizar a tecnologia para contribuir com a qualidade de vida da pessoa idosa, auxiliando no uso organizado de medicamentos e fortalecendo a comunicação entre pacientes, familiares, cuidadores e farmácias parceiras.
 
-**Próximas melhorias:**
+## 📈 Próximas evoluções
 
-- Configuração de produção do WhatsApp Business.
-- Geração de APK para instalação em dispositivos Android.
-- Ampliação dos testes com diferentes usuários.
-- Melhorias de segurança, estabilidade e experiência do usuário.
+- Aprimoramento da experiência do usuário.
+- Expansão da rede de farmácias parceiras.
+- Evolução dos recursos de acompanhamento de medicamentos.
+- Melhorias na acessibilidade.
+- Novas funcionalidades de apoio aos cuidadores.
+
+## 👨‍💻 Desenvolvimento
+
+Projeto acadêmico desenvolvido na área de **Análise e Desenvolvimento de Sistemas (ADS)**.
+
+**Repositório:** https://github.com/maxsuelfilme-png/Lembrar-Facil-3.0
+
+**Portal das Farmácias:** https://lembrafacil-farmacias.vercel.app
 
 ---
 
-**LembraFácil — Cuidando da sua rotina com carinho. 💚**
+**LembraFácil — Tecnologia a serviço do cuidado.** 💙💚
