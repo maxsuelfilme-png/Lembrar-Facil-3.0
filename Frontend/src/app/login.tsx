@@ -1,9 +1,10 @@
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -16,10 +17,7 @@ import {
 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import {
-  Ionicons,
-  MaterialCommunityIcons,
-} from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 import {
   fazerLogin,
@@ -29,6 +27,7 @@ import {
 
 export default function LoginIdosoScreen() {
   const router = useRouter();
+  const scrollRef = useRef<ScrollView>(null);
 
   const [cadastro, setCadastro] = useState(false);
   const [usuario, setUsuario] = useState("");
@@ -46,10 +45,7 @@ export default function LoginIdosoScreen() {
       try {
         await logout();
       } catch (erro) {
-        console.error(
-          "Erro ao limpar sessão anterior:",
-          erro
-        );
+        console.error("Erro ao limpar sessão anterior:", erro);
       } finally {
         if (ativo) {
           setPreparandoLogin(false);
@@ -64,6 +60,15 @@ export default function LoginIdosoScreen() {
     };
   }, []);
 
+  // AJUSTA A ROLAGEM AO FOCAR NOS CAMPOS
+  function ajustarTeclado() {
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({
+        animated: true,
+      });
+    }, 250);
+  }
+
   // LOGIN OU CADASTRO
   async function entrar() {
     if (carregando || preparandoLogin) {
@@ -71,21 +76,16 @@ export default function LoginIdosoScreen() {
     }
 
     if (!usuario.trim() || !senha.trim()) {
-      Alert.alert(
-        "Atenção",
-        "Informe seu usuário e sua senha."
-      );
+      Alert.alert("Atenção", "Informe seu usuário e sua senha.");
       return;
     }
 
     if (cadastro && !nome.trim()) {
-      Alert.alert(
-        "Atenção",
-        "Informe seu nome completo."
-      );
+      Alert.alert("Atenção", "Informe seu nome completo.");
       return;
     }
 
+    Keyboard.dismiss();
     setCarregando(true);
 
     try {
@@ -96,10 +96,7 @@ export default function LoginIdosoScreen() {
           senha
         );
       } else {
-        await fazerLogin(
-          usuario.trim(),
-          senha
-        );
+        await fazerLogin(usuario.trim(), senha);
       }
 
       setSenha("");
@@ -110,10 +107,7 @@ export default function LoginIdosoScreen() {
           ? erro.message
           : "Não foi possível acessar sua conta.";
 
-      Alert.alert(
-        "Erro de autenticação",
-        mensagem
-      );
+      Alert.alert("Erro de autenticação", mensagem);
     } finally {
       setCarregando(false);
     }
@@ -121,6 +115,7 @@ export default function LoginIdosoScreen() {
 
   // ALTERNAR ENTRE LOGIN E CADASTRO
   function alternarCadastro() {
+    Keyboard.dismiss();
     setCadastro((anterior) => !anterior);
     setSenha("");
     setMostrarSenha(false);
@@ -131,11 +126,7 @@ export default function LoginIdosoScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.carregamentoInicial}>
-          <ActivityIndicator
-            size="large"
-            color="#2563EB"
-          />
-
+          <ActivityIndicator size="large" color="#2563EB" />
           <Text style={styles.carregamentoTexto}>
             Preparando seu acesso...
           </Text>
@@ -148,21 +139,24 @@ export default function LoginIdosoScreen() {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={
-          Platform.OS === "ios"
-            ? "padding"
-            : undefined
-        }
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
+          ref={scrollRef}
+          style={styles.flex}
           contentContainerStyle={styles.conteudo}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
+          automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
         >
           {/* VOLTAR À TELA INICIAL */}
           <TouchableOpacity
             style={styles.voltar}
-            onPress={() => router.replace("/")}
+            onPress={() => {
+              Keyboard.dismiss();
+              router.replace("/");
+            }}
             accessibilityLabel="Voltar à tela inicial"
           >
             <Ionicons
@@ -170,10 +164,7 @@ export default function LoginIdosoScreen() {
               size={23}
               color="#1E40AF"
             />
-
-            <Text style={styles.voltarTexto}>
-              Voltar
-            </Text>
+            <Text style={styles.voltarTexto}>Voltar</Text>
           </TouchableOpacity>
 
           {/* LOGOTIPO */}
@@ -187,13 +178,8 @@ export default function LoginIdosoScreen() {
             </View>
 
             <Text style={styles.logoTexto}>
-              <Text style={styles.logoAzul}>
-                Lembra
-              </Text>
-
-              <Text style={styles.logoVerde}>
-                Fácil
-              </Text>
+              <Text style={styles.logoAzul}>Lembra</Text>
+              <Text style={styles.logoVerde}>Fácil</Text>
             </Text>
 
             <Text style={styles.slogan}>
@@ -257,15 +243,15 @@ export default function LoginIdosoScreen() {
                     onChangeText={setNome}
                     autoCapitalize="words"
                     editable={!carregando}
+                    returnKeyType="next"
+                    onFocus={ajustarTeclado}
                   />
                 </View>
               </>
             )}
 
             {/* USUÁRIO */}
-            <Text style={styles.label}>
-              Usuário
-            </Text>
+            <Text style={styles.label}>Usuário</Text>
 
             <View style={styles.campo}>
               <Ionicons
@@ -283,13 +269,13 @@ export default function LoginIdosoScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 editable={!carregando}
+                returnKeyType="next"
+                onFocus={ajustarTeclado}
               />
             </View>
 
             {/* SENHA */}
-            <Text style={styles.label}>
-              Senha
-            </Text>
+            <Text style={styles.label}>Senha</Text>
 
             <View style={styles.campo}>
               <Ionicons
@@ -306,14 +292,15 @@ export default function LoginIdosoScreen() {
                 onChangeText={setSenha}
                 secureTextEntry={!mostrarSenha}
                 autoCapitalize="none"
+                autoCorrect={false}
                 editable={!carregando}
+                returnKeyType="done"
+                onFocus={ajustarTeclado}
                 onSubmitEditing={entrar}
               />
 
               <TouchableOpacity
-                onPress={() =>
-                  setMostrarSenha(!mostrarSenha)
-                }
+                onPress={() => setMostrarSenha(!mostrarSenha)}
                 accessibilityLabel={
                   mostrarSenha
                     ? "Ocultar senha"
@@ -336,22 +323,17 @@ export default function LoginIdosoScreen() {
             <TouchableOpacity
               style={[
                 styles.botaoEntrar,
-                carregando &&
-                  styles.botaoDesativado,
+                carregando && styles.botaoDesativado,
               ]}
               onPress={entrar}
               disabled={carregando}
             >
               {carregando ? (
-                <ActivityIndicator
-                  color="#FFFFFF"
-                />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <>
                   <Text style={styles.botaoTexto}>
-                    {cadastro
-                      ? "Criar conta"
-                      : "Entrar"}
+                    {cadastro ? "Criar conta" : "Entrar"}
                   </Text>
 
                   <Ionicons
@@ -415,7 +397,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 20,
     paddingTop: 15,
-    paddingBottom: 35,
+    paddingBottom: 60,
   },
 
   carregamentoInicial: {
@@ -557,6 +539,7 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     fontSize: 16,
     paddingVertical: 12,
+    minWidth: 0,
   },
 
   botaoEntrar: {
