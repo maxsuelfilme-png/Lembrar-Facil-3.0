@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -28,10 +27,6 @@ import {
   desvincularPaciente,
   type VinculoPaciente,
 } from "../services/vinculosService";
-
-// ======================================================
-// TELEFONE BRASILEIRO
-// ======================================================
 
 const PREFIXO_BRASIL = "55";
 
@@ -49,10 +44,6 @@ function telefoneParaApi(valor: string): string {
   return PREFIXO_BRASIL + telefoneLocal(valor);
 }
 
-// ======================================================
-// CORES
-// ======================================================
-
 const CORES = {
   fundo: "#F8FBFF",
   azul: "#2563EB",
@@ -63,30 +54,19 @@ const CORES = {
   branco: "#FFFFFF",
 };
 
-// ======================================================
-// TELA FAMÍLIA
-// ======================================================
-
 export default function FamiliaScreen() {
   const router = useRouter();
 
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
   const [codigo, setCodigo] = useState("");
-
   const [vinculos, setVinculos] = useState<VinculoPaciente[]>([]);
-
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [vinculando, setVinculando] = useState(false);
   const [desvinculandoId, setDesvinculandoId] =
     useState<number | null>(null);
-
   const [erro, setErro] = useState("");
-
-  // ======================================================
-  // CARREGAR DADOS
-  // ======================================================
 
   const carregar = useCallback(async () => {
     try {
@@ -99,10 +79,7 @@ export default function FamiliaScreen() {
       ]);
 
       setNome(cuidador.nome || "");
-
-      // Remove o +55 da exibição, caso já esteja salvo.
       setTelefone(telefoneLocal(cuidador.telefone || ""));
-
       setVinculos(lista);
     } catch (e) {
       setErro(
@@ -120,10 +97,6 @@ export default function FamiliaScreen() {
       void carregar();
     }, [carregar])
   );
-
-  // ======================================================
-  // SALVAR FAMILIAR
-  // ======================================================
 
   async function salvar() {
     if (!nome.trim() || !telefone.trim()) {
@@ -147,14 +120,12 @@ export default function FamiliaScreen() {
     try {
       setSalvando(true);
 
-      // Envia automaticamente o código 55 junto ao telefone.
       const atualizado = await atualizarMeuCuidador(
         nome.trim(),
         telefoneParaApi(numeroLocal)
       );
 
       setNome(atualizado.nome || "");
-
       setTelefone(
         telefoneLocal(atualizado.telefone || numeroLocal)
       );
@@ -175,10 +146,6 @@ export default function FamiliaScreen() {
     }
   }
 
-  // ======================================================
-  // VINCULAR IDOSO
-  // ======================================================
-
   async function confirmarVinculo() {
     const codigoLimpo = codigo.trim().toUpperCase();
 
@@ -196,7 +163,6 @@ export default function FamiliaScreen() {
       await vincularPaciente(codigoLimpo);
 
       const lista = await listarPacientesVinculados();
-
       setVinculos(lista);
       setCodigo("");
 
@@ -218,10 +184,6 @@ export default function FamiliaScreen() {
     }
   }
 
-  // ======================================================
-  // NOME DO PACIENTE
-  // ======================================================
-
   function pacienteNome(v: VinculoPaciente): string {
     const nomePaciente = (v.paciente_nome || "").trim();
 
@@ -235,10 +197,6 @@ export default function FamiliaScreen() {
 
     return `Idoso #${v.paciente}`;
   }
-
-  // ======================================================
-  // EXCLUIR VÍNCULO
-  // ======================================================
 
   function confirmarDesvinculo(v: VinculoPaciente) {
     Alert.alert(
@@ -289,10 +247,6 @@ export default function FamiliaScreen() {
     }
   }
 
-  // ======================================================
-  // ABRIR MEDICAMENTOS
-  // ======================================================
-
   function abrirMedicamentos(id: number) {
     if (!Number.isInteger(id) || id <= 0) {
       Alert.alert(
@@ -315,10 +269,6 @@ export default function FamiliaScreen() {
     (v) => v.ativo !== false
   );
 
-  // ======================================================
-  // INTERFACE
-  // ======================================================
-
   return (
     <SafeAreaView
       style={styles.container}
@@ -326,17 +276,13 @@ export default function FamiliaScreen() {
     >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={
-          Platform.OS === "ios" ? "padding" : undefined
-        }
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* VOLTAR */}
-
           <TouchableOpacity
             style={styles.voltar}
             onPress={() => router.back()}
@@ -346,13 +292,8 @@ export default function FamiliaScreen() {
               size={24}
               color={CORES.azul}
             />
-
-            <Text style={styles.voltarTexto}>
-              Voltar
-            </Text>
+            <Text style={styles.voltarTexto}>Voltar</Text>
           </TouchableOpacity>
-
-          {/* TÍTULO */}
 
           <Text style={styles.titulo}>
             Área da família 💚
@@ -362,8 +303,6 @@ export default function FamiliaScreen() {
             Cuide de quem você ama, acompanhe medicamentos
             e mantenha seus dados atualizados.
           </Text>
-
-          {/* DESTAQUE */}
 
           <View style={styles.hero}>
             <MaterialCommunityIcons
@@ -376,7 +315,6 @@ export default function FamiliaScreen() {
               <Text style={styles.heroTitulo}>
                 Cuidando de quem você ama
               </Text>
-
               <Text style={styles.texto}>
                 Compartilhe a rotina de medicamentos
                 com segurança.
@@ -408,16 +346,12 @@ export default function FamiliaScreen() {
                 </View>
               )}
 
-              {/* FAMILIAR RESPONSÁVEL */}
-
               <Text style={styles.secao}>
                 Familiar responsável
               </Text>
 
               <View style={styles.card}>
-                <Text style={styles.label}>
-                  Nome
-                </Text>
+                <Text style={styles.label}>Nome</Text>
 
                 <TextInput
                   style={styles.input}
@@ -430,8 +364,6 @@ export default function FamiliaScreen() {
                 <Text style={styles.label}>
                   Telefone / WhatsApp
                 </Text>
-
-                {/* CAMPO COM +55 FIXO */}
 
                 <View style={styles.telefoneLinha}>
                   <View style={styles.prefixoContainer}>
@@ -477,8 +409,6 @@ export default function FamiliaScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* VINCULAR IDOSO */}
-
               <Text style={styles.secao}>
                 Vincular um idoso
               </Text>
@@ -501,10 +431,7 @@ export default function FamiliaScreen() {
                 </Text>
 
                 <TextInput
-                  style={[
-                    styles.input,
-                    { marginTop: 15 },
-                  ]}
+                  style={[styles.input, { marginTop: 15 }]}
                   placeholder="Código de 16 caracteres"
                   placeholderTextColor="#94A3B8"
                   value={codigo}
@@ -538,8 +465,6 @@ export default function FamiliaScreen() {
                   )}
                 </TouchableOpacity>
               </View>
-
-              {/* IDOSOS VINCULADOS */}
 
               <Text style={styles.secao}>
                 Idosos vinculados
@@ -618,8 +543,6 @@ export default function FamiliaScreen() {
                 ))
               )}
 
-              {/* ACOMPANHAMENTO */}
-
               <Text style={styles.secao}>
                 Acompanhamento
               </Text>
@@ -652,26 +575,7 @@ export default function FamiliaScreen() {
                 />
               </TouchableOpacity>
 
-              <View style={styles.opcao}>
-                <Ionicons
-                  name="notifications-outline"
-                  size={30}
-                  color="#D97706"
-                />
-
-                <View style={styles.opcaoConteudo}>
-                  <Text style={styles.cardTitulo}>
-                    Alertas
-                  </Text>
-
-                  <Text style={styles.texto}>
-                    Avisos automáticos dependem da
-                    configuração do serviço.
-                  </Text>
-                </View>
-              </View>
-
-              {/* FARMÁCIAS */}
+              {/* CARTÃO ALERTAS REMOVIDO */}
 
               <Text style={styles.secao}>
                 Farmácias e medicamentos
@@ -770,8 +674,6 @@ export default function FamiliaScreen() {
                 />
               </TouchableOpacity>
 
-              {/* RODAPÉ */}
-
               <View style={styles.rodape}>
                 <Text style={styles.rodapeTexto}>
                   🛡️ Cuidado e segurança 💚
@@ -786,10 +688,6 @@ export default function FamiliaScreen() {
     </SafeAreaView>
   );
 }
-
-// ======================================================
-// ESTILOS
-// ======================================================
 
 const styles = StyleSheet.create({
   container: {
@@ -888,8 +786,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     color: "#0F172A",
   },
-
-  // CAMPO DE TELEFONE COM +55
 
   telefoneLinha: {
     flexDirection: "row",
