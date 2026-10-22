@@ -2,9 +2,6 @@
 package expo.modules.medicationalarm
 
 import android.app.Activity
-import android.app.AlarmManager
-import android.app.PendingIntent
-import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Build
@@ -14,6 +11,7 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 
 class MedicationAlarmActivity : Activity() {
 
@@ -41,7 +39,10 @@ class MedicationAlarmActivity : Activity() {
 
         medicamento = intent.getStringExtra("medicamento")
             ?: "Medicamento"
-        horario = intent.getStringExtra("horario") ?: "--:--"
+
+        horario = intent.getStringExtra("horario")
+            ?: "--:--"
+
         alarmeId = intent.getIntExtra("alarmeId", 0)
 
         val layout = LinearLayout(this).apply {
@@ -68,6 +69,7 @@ class MedicationAlarmActivity : Activity() {
 
         val desligar = Button(this).apply {
             text = "Desligar"
+
             setOnClickListener {
                 pararDespertador()
                 finish()
@@ -76,9 +78,31 @@ class MedicationAlarmActivity : Activity() {
 
         val adiar = Button(this).apply {
             text = "Adiar 5 minutos"
+
             setOnClickListener {
-                adiarDespertador()
-                finish()
+                try {
+                    val agendado = AlarmScheduleStore.snooze(
+                        this@MedicationAlarmActivity,
+                        alarmeId
+                    )
+
+                    if (agendado) {
+                        pararDespertador()
+                        finish()
+                    } else {
+                        Toast.makeText(
+                            this@MedicationAlarmActivity,
+                            "Alarme não encontrado",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        this@MedicationAlarmActivity,
+                        "Não foi possível adiar: ${e.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         }
 
@@ -91,52 +115,13 @@ class MedicationAlarmActivity : Activity() {
     }
 
     private fun pararDespertador() {
-        val pararIntent = Intent(
-            this,
-            MedicationAlarmService::class.java
-        ).apply {
-            action = MedicationAlarmService.ACTION_STOP
-        }
-
-        startService(pararIntent)
-    }
-
-    private fun adiarDespertador() {
-        val alarmManager = getSystemService(
-            Context.ALARM_SERVICE
-        ) as AlarmManager
-
-        val intent = Intent(
-            this,
-            MedicationAlarmReceiver::class.java
-        ).apply {
-            putExtra("medicamento", medicamento)
-            putExtra("horario", horario)
-            putExtra("alarmeId", alarmeId)
-        }
-
-        val pendingIntent = PendingIntent.getBroadcast(
-            this,
-            alarmeId,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or
-                PendingIntent.FLAG_IMMUTABLE
+        startService(
+            Intent(
+                this,
+                MedicationAlarmService::class.java
+            ).apply {
+                action = MedicationAlarmService.ACTION_STOP
+            }
         )
-
-        val proximoHorario =
-            System.currentTimeMillis() + 5 * 60 * 1000L
-
-        if (
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-            alarmManager.canScheduleExactAlarms()
-        ) {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                proximoHorario,
-                pendingIntent
-            )
-        }
-
-        pararDespertador()
     }
 }

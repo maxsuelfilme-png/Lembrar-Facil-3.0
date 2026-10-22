@@ -2,9 +2,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
+
 import type { Medicamento } from "./medicamentosService";
 
-const CHAVE_LEMBRETES = "@lembrafacil:lembretes:idoso";
+const CHAVE_LEMBRETES =
+  "@lembrafacil:lembretes:idoso";
 
 type LembretesSalvos = Record<string, string>;
 
@@ -13,17 +15,22 @@ type ModuloNotificacoes =
 
 let modulo: ModuloNotificacoes | null = null;
 
-function obterNotificacoes(): ModuloNotificacoes | null {
-  if (Platform.OS === "web") return null;
+// ======================================================
+// NOTIFICAÇÕES EXPO
+// ======================================================
 
-  // Expo Go não suporta a integração completa
-  // de notificações usada nesta implementação.
+function obterNotificacoes(): ModuloNotificacoes | null {
+  if (Platform.OS === "web") {
+    return null;
+  }
+
   if (Constants.appOwnership === "expo") {
     return null;
   }
 
   if (!modulo) {
-    modulo = require("expo-notifications") as ModuloNotificacoes;
+    modulo =
+      require("expo-notifications") as ModuloNotificacoes;
 
     modulo.setNotificationHandler({
       handleNotification: async () => ({
@@ -38,10 +45,18 @@ function obterNotificacoes(): ModuloNotificacoes | null {
   return modulo;
 }
 
-async function carregarIds(): Promise<LembretesSalvos> {
-  const salvo = await AsyncStorage.getItem(CHAVE_LEMBRETES);
+// ======================================================
+// ARMAZENAMENTO DOS IDS ANTIGOS
+// ======================================================
 
-  if (!salvo) return {};
+async function carregarIds(): Promise<LembretesSalvos> {
+  const salvo = await AsyncStorage.getItem(
+    CHAVE_LEMBRETES
+  );
+
+  if (!salvo) {
+    return {};
+  }
 
   try {
     return JSON.parse(salvo) as LembretesSalvos;
@@ -50,93 +65,100 @@ async function carregarIds(): Promise<LembretesSalvos> {
   }
 }
 
-async function salvarIds(ids: LembretesSalvos) {
+async function salvarIds(
+  ids: LembretesSalvos
+): Promise<void> {
   await AsyncStorage.setItem(
     CHAVE_LEMBRETES,
     JSON.stringify(ids)
   );
 }
 
-function extrairHorario(horario: string) {
-  const resultado = /^(\d{1,2}):(\d{2})$/.exec(
-    horario.trim()
-  );
-
-  if (!resultado) {
-    throw new Error("Use um horário como 08:00.");
-  }
-
-  const hour = Number(resultado[1]);
-  const minute = Number(resultado[2]);
-
-  if (hour > 23 || minute > 59) {
-    throw new Error("Horário inválido.");
-  }
-
-  return { hour, minute };
-}
-
-async function solicitarPermissao(): Promise<boolean> {
-  const Notifications = obterNotificacoes();
-
-  if (!Notifications) return false;
-
-  if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync(
-      "medicamentos",
-      {
-        name: "Lembretes de medicamentos",
-        importance:
-          Notifications.AndroidImportance.HIGH,
-        sound: "default",
-      }
-    );
-  }
-
-  const atual = await Notifications.getPermissionsAsync();
-
-  if (atual.granted) return true;
-
-  const resposta =
-    await Notifications.requestPermissionsAsync();
-
-  return resposta.granted;
-}
+// ======================================================
+// CANCELAR LEMBRETE EXPO ANTIGO
+// ======================================================
 
 export async function cancelarLembrete(
   medicamentoId: string
 ): Promise<void> {
   const Notifications = obterNotificacoes();
 
-  if (!Notifications) return;
+  if (!Notifications) {
+    return;
+  }
 
   const ids = await carregarIds();
   const notificacaoId = ids[medicamentoId];
 
-  if (!notificacaoId) return;
+  if (!notificacaoId) {
+    return;
+  }
 
-  await Notifications.cancelScheduledNotificationAsync(
-    notificacaoId
-  );
+  try {
+    await Notifications.cancelScheduledNotificationAsync(
+      notificacaoId
+    );
+  } catch (erro) {
+    console.warn(
+      "Não foi possível cancelar a notificação antiga:",
+      erro
+    );
+    return;
+  }
 
   delete ids[medicamentoId];
   await salvarIds(ids);
 }
 
+// ======================================================
+// AGENDAR LEMBRETE
+// ======================================================
+
 export async function agendarLembrete(
   medicamento: Medicamento
 ): Promise<boolean> {
+  if (Platform.OS === "android") {
+    // No Android, o despertador principal é Kotlin.
+    // O agendamento nativo é tratado separadamente.
+    return false;
+  }
+
   const Notifications = obterNotificacoes();
 
-  if (!Notifications) return false;
+  if (!Notifications) {
+    return false;
+  }
 
-  const permitido = await solicitarPermissao();
-
-  if (!permitido) return false;
-
-  const { hour, minute } = extrairHorario(
-    medicamento.horario
+  const horario = medicamento.horario.match(
+    /^(\d{1,2}):(\d{2})$/
   );
+
+  if (!horario) {
+    throw new Error(
+      "Horário inválido para notificação."
+    );
+  }
+
+  const hour = Number(horario[1]);
+  const minute = Number(horario[2]);
+
+  if (
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    throw new Error(
+      "Horário inválido para notificação."
+    );
+  }
+
+  const permissao =
+    await Notifications.getPermissionsAsync();
+
+  if (!permissao.granted) {
+    return false;
+  }
 
   await cancelarLembrete(medicamento.id);
 
@@ -146,8 +168,7 @@ export async function agendarLembrete(
         title: "💊 Hora do medicamento!",
         body:
           `${medicamento.medicamento} — ` +
-          `${medicamento.dosagem}\n` +
-          "Confira sua rotina no LembraFácil.",
+          `${medicamento.dosagem}`,
         sound: "default",
         data: {
           medicamentoId: medicamento.id,
@@ -158,7 +179,6 @@ export async function agendarLembrete(
           Notifications.SchedulableTriggerInputTypes.DAILY,
         hour,
         minute,
-        channelId: "medicamentos",
       },
     });
 
@@ -171,18 +191,36 @@ export async function agendarLembrete(
   return true;
 }
 
+// ======================================================
+// SINCRONIZAR LEMBRETES
+// ======================================================
+
 export async function sincronizarLembretes(
   medicamentos: Medicamento[]
 ): Promise<void> {
   const Notifications = obterNotificacoes();
 
   if (!Notifications) {
-    console.log(
-      "Lembretes desativados no Expo Go."
-    );
     return;
   }
 
+  // No Android, remover notificações antigas do Expo
+  // para evitar duplicidade com o despertador Kotlin.
+  if (Platform.OS === "android") {
+    const ids = await carregarIds();
+
+    for (const id of Object.keys(ids)) {
+      await cancelarLembrete(id);
+    }
+
+    console.log(
+      "[LembraFácil] Notificações Expo antigas removidas."
+    );
+
+    return;
+  }
+
+  // Outros sistemas continuam com o mecanismo Expo.
   const ids = await carregarIds();
 
   const medicamentosAtuais = new Set(

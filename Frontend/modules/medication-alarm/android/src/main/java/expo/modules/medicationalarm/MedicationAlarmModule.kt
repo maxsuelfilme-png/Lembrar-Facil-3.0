@@ -2,10 +2,12 @@
 package expo.modules.medicationalarm
 
 import android.app.AlarmManager
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
+
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
@@ -21,99 +23,106 @@ class MedicationAlarmModule : Module() {
 
         AsyncFunction("verificarPermissaoAlarme") {
             val context = appContext.reactContext
-                ?: throw IllegalStateException("Contexto Android indisponível")
+                ?: error("Contexto Android indisponível")
 
-            val alarmManager = context.getSystemService(
+            val manager = context.getSystemService(
                 Context.ALARM_SERVICE
             ) as AlarmManager
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                alarmManager.canScheduleExactAlarms()
-            } else {
-                true
-            }
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                manager.canScheduleExactAlarms()
         }
 
-        AsyncFunction(
-            "agendarAlarme"
-        ) { id: Int, medicamento: String, horario: String, timestamp: Double ->
-
+        AsyncFunction("solicitarPermissaoAlarme") {
             val context = appContext.reactContext
-                ?: throw IllegalStateException("Contexto Android indisponível")
+                ?: error("Contexto Android indisponível")
 
-            val horarioMillis = timestamp.toLong()
-
-            require(horarioMillis > System.currentTimeMillis()) {
-                "O horário do alarme precisa estar no futuro"
-            }
-
-            val alarmManager = context.getSystemService(
+            val manager = context.getSystemService(
                 Context.ALARM_SERVICE
             ) as AlarmManager
 
             if (
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                !alarmManager.canScheduleExactAlarms()
+                !manager.canScheduleExactAlarms()
             ) {
-                throw IllegalStateException(
-                    "Permissão para alarmes exatos não concedida"
+                context.startActivity(
+                    Intent(
+                        Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM
+                    ).apply {
+                        data = Uri.parse(
+                            "package:${context.packageName}"
+                        )
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
                 )
+                false
+            } else {
+                true
             }
+        }
 
-            val intent = Intent(
-                context,
-                MedicationAlarmReceiver::class.java
-            ).apply {
-                putExtra("medicamento", medicamento)
-                putExtra("horario", horario)
-                putExtra("alarmeId", id)
-            }
+        // Mantém a função de teste existente.
+        AsyncFunction("agendarAlarme") {
+            id: Int,
+            medicamento: String,
+            horario: String,
+            timestamp: Double ->
 
-            val pendingIntent = PendingIntent.getBroadcast(
+            val context = appContext.reactContext
+                ?: error("Contexto Android indisponível")
+
+            AlarmScheduleStore.create(
                 context,
                 id,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or
-                    PendingIntent.FLAG_IMMUTABLE
+                medicamento,
+                horario,
+                "1 vez ao dia",
+                "1 dia",
+                timestamp.toLong()
             )
 
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                horarioMillis,
-                pendingIntent
+            true
+        }
+
+        // Agenda conforme frequência e duração.
+        AsyncFunction("agendarTratamento") {
+            id: Int,
+            medicamento: String,
+            horario: String,
+            frequencia: String,
+            duracao: String,
+            timestamp: Double ->
+
+            val context = appContext.reactContext
+                ?: error("Contexto Android indisponível")
+
+            AlarmScheduleStore.create(
+                context,
+                id,
+                medicamento,
+                horario,
+                frequencia,
+                duracao,
+                timestamp.toLong()
             )
 
             true
         }
 
         AsyncFunction("cancelarAlarme") { id: Int ->
-
             val context = appContext.reactContext
-                ?: throw IllegalStateException("Contexto Android indisponível")
+                ?: error("Contexto Android indisponível")
 
-            val alarmManager = context.getSystemService(
-                Context.ALARM_SERVICE
-            ) as AlarmManager
-
-            val intent = Intent(
-                context,
-                MedicationAlarmReceiver::class.java
-            )
-
-            val pendingIntent = PendingIntent.getBroadcast(
-                context,
-                id,
-                intent,
-                PendingIntent.FLAG_NO_CREATE or
-                    PendingIntent.FLAG_IMMUTABLE
-            )
-
-            if (pendingIntent != null) {
-                alarmManager.cancel(pendingIntent)
-                pendingIntent.cancel()
-            }
+            AlarmScheduleStore.cancel(context, id)
 
             true
+        }
+
+        AsyncFunction("restaurarAlarmes") {
+            val context = appContext.reactContext
+                ?: error("Contexto Android indisponível")
+
+            AlarmScheduleStore.restore(context)
         }
     }
 }

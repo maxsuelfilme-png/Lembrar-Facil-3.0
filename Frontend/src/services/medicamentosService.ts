@@ -7,6 +7,12 @@ import {
   renovarAccessTokenIdoso,
 } from "./authService";
 
+import {
+  agendarTratamentoMedicamento,
+  cancelarAlarmeMedicamento,
+  verificarPermissaoAlarme,
+} from "./alarmService";
+
 // ======================================================
 // TIPOS
 // ======================================================
@@ -48,7 +54,9 @@ export type DadosMedicamento = {
   unidade_estoque?: string;
 };
 
-export type PerfilMedicamentos = "idoso" | "familiar";
+export type PerfilMedicamentos =
+  | "idoso"
+  | "familiar";
 
 export type OpcoesMedicamentos = {
   perfil?: PerfilMedicamentos;
@@ -63,6 +71,7 @@ type MedicamentoAPI = {
   horario: string;
   frequencia: string;
   duracao: string;
+
   observacao?: string;
   ativo?: boolean;
   criado_em?: string;
@@ -104,7 +113,9 @@ function numeroOuNull(
 
   const numero = Number(valor);
 
-  return Number.isFinite(numero) ? numero : null;
+  return Number.isFinite(numero)
+    ? numero
+    : null;
 }
 
 function converterDaAPI(
@@ -115,9 +126,11 @@ function converterDaAPI(
     medicamento: item.nome ?? "",
     dosagem: item.dose ?? "",
     quantidade: String(item.quantidade ?? ""),
+
     horario: item.horario
       ? String(item.horario).substring(0, 5)
       : "",
+
     frequencia: item.frequencia ?? "",
     duracao: item.duracao ?? "",
 
@@ -143,7 +156,9 @@ function converterDaAPI(
 // NORMALIZAR HORÁRIO
 // ======================================================
 
-function normalizarHorario(horario: string): string {
+function normalizarHorario(
+  horario: string
+): string {
   const valor = horario
     .trim()
     .toLowerCase()
@@ -156,7 +171,9 @@ function normalizarHorario(horario: string): string {
     /^(\d{1,2})(?:[:h.](\d{1,2}))?$/
   );
 
-  const compacto = valor.match(/^(\d{2})(\d{2})$/);
+  const compacto = valor.match(
+    /^(\d{2})(\d{2})$/
+  );
 
   if (comSeparador) {
     horas = Number(comSeparador[1]);
@@ -213,22 +230,26 @@ function converterParaAPI(
   const dados: Record<string, unknown> = {
     nome: medicamento.medicamento.trim(),
     dose: medicamento.dosagem.trim(),
+
     quantidade: String(
       medicamento.quantidade ?? ""
     ).trim(),
+
     horario: normalizarHorario(
       medicamento.horario
     ),
+
     frequencia: String(
       medicamento.frequencia ?? ""
     ).trim(),
+
     duracao: String(
       medicamento.duracao ?? ""
     ).trim(),
   };
 
   // Os campos de estoque são opcionais.
-  // O campo antigo "quantidade" continua separado.
+  // O campo quantidade continua separado.
 
   if (
     medicamento.estoque_inicial !== undefined ||
@@ -241,7 +262,8 @@ function converterParaAPI(
       medicamento.consumo_por_dose ?? null;
 
     if (
-      (estoque === null) !== (consumo === null)
+      (estoque === null) !==
+      (consumo === null)
     ) {
       throw new Error(
         "Informe o estoque inicial e o consumo por dose juntos."
@@ -268,6 +290,7 @@ function converterParaAPI(
 
     dados.estoque_inicial = estoque;
     dados.consumo_por_dose = consumo;
+
     dados.unidade_estoque =
       medicamento.unidade_estoque?.trim() ||
       "comprimido";
@@ -322,7 +345,7 @@ async function obterMensagemErro(
         .join("\n");
     }
   } catch {
-    // A resposta não está em JSON.
+    // Resposta não está em JSON.
   }
 
   return texto.substring(0, 300);
@@ -431,7 +454,160 @@ async function fetchAutenticado(
 }
 
 // ======================================================
-// CADASTRAR MEDICAMENTO
+// DESPERTADOR ANDROID
+// CALCULAR PRÓXIMO HORÁRIO
+// ======================================================
+
+function calcularProximoAlarme(
+  horario: string
+): Date {
+  const partes = horario
+    .trim()
+    .match(/^(\d{2}):(\d{2})/);
+
+  if (!partes) {
+    throw new Error(
+      "Horário inválido para o despertador."
+    );
+  }
+
+  const horas = Number(partes[1]);
+  const minutos = Number(partes[2]);
+
+  if (
+    !Number.isInteger(horas) ||
+    !Number.isInteger(minutos) ||
+    horas < 0 ||
+    horas > 23 ||
+    minutos < 0 ||
+    minutos > 59
+  ) {
+    throw new Error(
+      "Horário inválido para o despertador."
+    );
+  }
+
+  const agora = new Date();
+  const proximo = new Date();
+
+  proximo.setHours(horas, minutos, 0, 0);
+
+  if (proximo.getTime() <= agora.getTime()) {
+    proximo.setDate(
+      proximo.getDate() + 1
+    );
+  }
+
+  return proximo;
+}
+
+// ======================================================
+// DESPERTADOR ANDROID
+// AGENDAR TRATAMENTO
+// ======================================================
+
+async function sincronizarAlarmeDoIdoso(
+  medicamento: Medicamento
+): Promise<void> {
+  try {
+    const id = Number(medicamento.id);
+
+    if (
+      !Number.isSafeInteger(id) ||
+      id <= 0
+    ) {
+      throw new Error(
+        "ID inválido para o alarme."
+      );
+    }
+
+    const permitido =
+      await verificarPermissaoAlarme();
+
+    if (!permitido) {
+      console.warn(
+        "[LembraFácil] Permissão de alarme exato não concedida."
+      );
+
+      return;
+    }
+
+    const proximoHorario =
+      calcularProximoAlarme(
+        medicamento.horario
+      );
+
+    // Envia ao Kotlin todos os dados necessários
+    // para programar o tratamento.
+
+    await agendarTratamentoMedicamento(
+      id,
+      medicamento.medicamento,
+      medicamento.horario,
+      medicamento.frequencia,
+      medicamento.duracao,
+      proximoHorario
+    );
+
+    console.log(
+      "[LembraFácil] Tratamento agendado:",
+      medicamento.medicamento,
+      "Horário:",
+      medicamento.horario,
+      "Frequência:",
+      medicamento.frequencia,
+      "Duração:",
+      medicamento.duracao,
+      "Próximo:",
+      proximoHorario.toLocaleString("pt-BR")
+    );
+  } catch (erro) {
+    // Não desfaz o cadastro no Django.
+    console.error(
+      "[LembraFácil] Medicamento salvo, mas o alarme não foi agendado:",
+      erro
+    );
+  }
+}
+
+// ======================================================
+// DESPERTADOR ANDROID
+// CANCELAR
+// ======================================================
+
+async function cancelarAlarmeDoIdoso(
+  id: string
+): Promise<void> {
+  try {
+    const idNumerico = Number(id);
+
+    if (
+      !Number.isSafeInteger(idNumerico) ||
+      idNumerico <= 0
+    ) {
+      throw new Error(
+        "ID inválido para cancelar o alarme."
+      );
+    }
+
+    await cancelarAlarmeMedicamento(
+      idNumerico
+    );
+
+    console.log(
+      "[LembraFácil] Alarme cancelado:",
+      idNumerico
+    );
+  } catch (erro) {
+    console.error(
+      "[LembraFácil] Não foi possível cancelar o alarme:",
+      erro
+    );
+  }
+}
+
+// ======================================================
+// CADASTRAR MEDICAMENTO - CREATE
 // ======================================================
 
 export async function adicionarMedicamento(
@@ -439,7 +615,10 @@ export async function adicionarMedicamento(
   opcoes: OpcoesMedicamentos
 ): Promise<Medicamento> {
   const perfil = validarOpcoes(opcoes);
-  const dados = converterParaAPI(medicamento);
+
+  const dados = converterParaAPI(
+    medicamento
+  );
 
   const corpo =
     perfil === "familiar"
@@ -467,11 +646,22 @@ export async function adicionarMedicamento(
   const resultado: MedicamentoAPI =
     await response.json();
 
-  return converterDaAPI(resultado);
+  const medicamentoSalvo =
+    converterDaAPI(resultado);
+
+  // O despertador é programado neste aparelho
+  // quando o cadastro é feito pelo perfil idoso.
+  if (perfil === "idoso") {
+    await sincronizarAlarmeDoIdoso(
+      medicamentoSalvo
+    );
+  }
+
+  return medicamentoSalvo;
 }
 
 // ======================================================
-// LISTAR MEDICAMENTOS
+// LISTAR MEDICAMENTOS - READ
 // ======================================================
 
 export async function listarMedicamentos(
@@ -508,7 +698,7 @@ export async function listarMedicamentos(
 }
 
 // ======================================================
-// BUSCAR MEDICAMENTO
+// BUSCAR MEDICAMENTO - READ
 // ======================================================
 
 export async function buscarMedicamento(
@@ -540,7 +730,7 @@ export async function buscarMedicamento(
 }
 
 // ======================================================
-// ATUALIZAR MEDICAMENTO
+// ATUALIZAR MEDICAMENTO - UPDATE
 // ======================================================
 
 export async function atualizarMedicamento(
@@ -576,11 +766,21 @@ export async function atualizarMedicamento(
   const resultado: MedicamentoAPI =
     await response.json();
 
-  return converterDaAPI(resultado);
+  const medicamentoAtualizado =
+    converterDaAPI(resultado);
+
+  // Atualiza o alarme no aparelho do idoso.
+  if (perfil === "idoso") {
+    await sincronizarAlarmeDoIdoso(
+      medicamentoAtualizado
+    );
+  }
+
+  return medicamentoAtualizado;
 }
 
 // ======================================================
-// EXCLUIR MEDICAMENTO
+// EXCLUIR MEDICAMENTO - DELETE
 // ======================================================
 
 export async function excluirMedicamento(
@@ -607,6 +807,11 @@ export async function excluirMedicamento(
     );
   }
 
+  // Cancela o alarme após a exclusão no Django.
+  if (perfil === "idoso") {
+    await cancelarAlarmeDoIdoso(id);
+  }
+
   return true;
 }
 
@@ -623,7 +828,6 @@ export async function reporEstoqueMedicamento(
 ): Promise<Medicamento> {
   const perfil = validarOpcoes(opcoes);
 
-  // Validação da quantidade
   if (
     !Number.isFinite(quantidade) ||
     quantidade <= 0 ||

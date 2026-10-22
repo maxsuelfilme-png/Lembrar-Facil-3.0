@@ -13,35 +13,50 @@ class MedicationAlarmReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent
     ) {
-        val medicamento = intent.getStringExtra("medicamento")
-            ?: "Medicamento"
+        val id = intent.data
+            ?.lastPathSegment
+            ?.toIntOrNull()
+            ?: intent.getIntExtra("alarmeId", 0)
 
-        val horario = intent.getStringExtra("horario")
-            ?: "--:--"
+        if (id <= 0) return
 
-        val alarmeId = intent.getIntExtra("alarmeId", 0)
+        val isSnooze = intent.action ==
+            "expo.modules.medicationalarm.SNOOZE"
 
-        Log.d(
-            "LembraFacilAlarm",
-            "Alarme recebido: $medicamento às $horario"
-        )
+        val schedule = try {
+            if (isSnooze) {
+                AlarmScheduleStore.get(context, id)
+            } else {
+                AlarmScheduleStore.fired(context, id)
+            }
+        } catch (e: Exception) {
+            Log.e(
+                "LembraFacilAlarm",
+                "Falha ao reagendar",
+                e
+            )
+            null
+        } ?: return
 
-        val serviceIntent = Intent(
+        val service = Intent(
             context,
             MedicationAlarmService::class.java
         ).apply {
-            putExtra("medicamento", medicamento)
-            putExtra("horario", horario)
-            putExtra("alarmeId", alarmeId)
+            putExtra(
+                "medicamento",
+                schedule.optString("name", "Medicamento")
+            )
+            putExtra(
+                "horario",
+                schedule.optString("time", "--:--")
+            )
+            putExtra("alarmeId", id)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(serviceIntent)
+            context.startForegroundService(service)
         } else {
-            context.startService(serviceIntent)
+            context.startService(service)
         }
-
-        // A abertura da tela será feita pela notificação
-        // de alarme, respeitando as restrições do Android.
     }
 }

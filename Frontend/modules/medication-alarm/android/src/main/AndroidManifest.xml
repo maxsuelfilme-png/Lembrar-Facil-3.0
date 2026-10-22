@@ -1,6 +1,7 @@
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Permissões do despertador -->
     <uses-permission
         android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
@@ -16,19 +17,39 @@
     <uses-permission
         android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
+    <!-- Permissão para receber reinicialização -->
+    <uses-permission
+        android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application>
 
+        <!-- Recebe o disparo dos alarmes -->
         <receiver
             android:name=".MedicationAlarmReceiver"
             android:enabled="true"
             android:exported="false" />
 
+        <!-- Recebe a reinicialização do Android -->
+        <receiver
+            android:name=".MedicationAlarmBootReceiver"
+            android:enabled="true"
+            android:exported="false">
+
+            <intent-filter>
+                <action
+                    android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+
+        </receiver>
+
+        <!-- Serviço responsável pelo som -->
         <service
             android:name=".MedicationAlarmService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
+        <!-- Tela do despertador -->
         <activity
             android:name=".MedicationAlarmActivity"
             android:exported="false"
