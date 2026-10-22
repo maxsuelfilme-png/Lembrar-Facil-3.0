@@ -9,7 +9,7 @@ const API_ONLINE =
   "https://lembrar-facil-30-production.up.railway.app/api";
 
 const API_LOCAL =
-  "http://10.172.255.132:8000/api";
+  "http://192.168.1.7:8000/api";
 
 export const MODO_API: "online" | "online" = "online";
 
