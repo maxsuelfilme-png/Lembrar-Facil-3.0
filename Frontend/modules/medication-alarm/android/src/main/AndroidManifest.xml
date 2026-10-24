@@ -1,37 +1,41 @@
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Permissões do despertador -->
+    <!-- Permissão para alarmes exatos -->
     <uses-permission
         android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
+    <!-- Permissão para notificações -->
     <uses-permission
         android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Serviço em primeiro plano -->
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE" />
 
+    <!-- Reprodução de áudio em primeiro plano -->
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
+    <!-- Tela de alarme sobre a tela de bloqueio -->
     <uses-permission
         android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
-    <!-- Permissão para receber reinicialização -->
+    <!-- Restaurar alarmes após reinicialização -->
     <uses-permission
         android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application>
 
-        <!-- Recebe o disparo dos alarmes -->
+        <!-- Recebe os alarmes programados -->
         <receiver
-            android:name=".MedicationAlarmReceiver"
+            android:name="expo.modules.medicationalarm.MedicationAlarmReceiver"
             android:enabled="true"
             android:exported="false" />
 
-        <!-- Recebe a reinicialização do Android -->
+        <!-- Restaura alarmes após reinicialização -->
         <receiver
-            android:name=".MedicationAlarmBootReceiver"
+            android:name="expo.modules.medicationalarm.MedicationAlarmBootReceiver"
             android:enabled="true"
             android:exported="false">
 
@@ -42,16 +46,16 @@
 
         </receiver>
 
-        <!-- Serviço responsável pelo som -->
+        <!-- Serviço responsável pela notificação e pelo som -->
         <service
-            android:name=".MedicationAlarmService"
+            android:name="expo.modules.medicationalarm.MedicationAlarmService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
         <!-- Tela do despertador -->
         <activity
-            android:name=".MedicationAlarmActivity"
+            android:name="expo.modules.medicationalarm.MedicationAlarmActivity"
             android:exported="false"
             android:showWhenLocked="true"
             android:turnScreenOn="true"

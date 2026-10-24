@@ -6,6 +6,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.Button
@@ -15,13 +16,46 @@ import android.widget.Toast
 
 class MedicationAlarmActivity : Activity() {
 
+    companion object {
+        private const val TAG = "LembraFacilAlarm"
+    }
+
     private var medicamento = "Medicamento"
     private var horario = "--:--"
     private var alarmeId = 0
 
+    private lateinit var descricao: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        configurarTelaBloqueada()
+        atualizarDados(intent)
+        construirTela()
+
+        Log.i(
+            TAG,
+            "Tela aberta: id=$alarmeId medicamento=$medicamento"
+        )
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+
+        setIntent(intent)
+        atualizarDados(intent)
+
+        if (::descricao.isInitialized) {
+            descricao.text = "$medicamento\n$horario"
+        }
+
+        Log.i(
+            TAG,
+            "Tela atualizada: id=$alarmeId medicamento=$medicamento"
+        )
+    }
+
+    private fun configurarTelaBloqueada() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -36,15 +70,19 @@ class MedicationAlarmActivity : Activity() {
         window.addFlags(
             WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
         )
+    }
 
-        medicamento = intent.getStringExtra("medicamento")
+    private fun atualizarDados(intent: Intent?) {
+        medicamento = intent?.getStringExtra("medicamento")
             ?: "Medicamento"
 
-        horario = intent.getStringExtra("horario")
+        horario = intent?.getStringExtra("horario")
             ?: "--:--"
 
-        alarmeId = intent.getIntExtra("alarmeId", 0)
+        alarmeId = intent?.getIntExtra("alarmeId", 0) ?: 0
+    }
 
+    private fun construirTela() {
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -59,7 +97,7 @@ class MedicationAlarmActivity : Activity() {
             gravity = Gravity.CENTER
         }
 
-        val descricao = TextView(this).apply {
+        descricao = TextView(this).apply {
             text = "$medicamento\n$horario"
             textSize = 23f
             setTextColor(Color.WHITE)
@@ -71,6 +109,11 @@ class MedicationAlarmActivity : Activity() {
             text = "Desligar"
 
             setOnClickListener {
+                Log.i(
+                    TAG,
+                    "Botão Desligar: id=$alarmeId"
+                )
+
                 pararDespertador()
                 finish()
             }
@@ -87,6 +130,11 @@ class MedicationAlarmActivity : Activity() {
                     )
 
                     if (agendado) {
+                        Log.i(
+                            TAG,
+                            "Alarme adiado: id=$alarmeId"
+                        )
+
                         pararDespertador()
                         finish()
                     } else {
@@ -97,6 +145,12 @@ class MedicationAlarmActivity : Activity() {
                         ).show()
                     }
                 } catch (e: Exception) {
+                    Log.e(
+                        TAG,
+                        "Erro ao adiar alarme $alarmeId",
+                        e
+                    )
+
                     Toast.makeText(
                         this@MedicationAlarmActivity,
                         "Não foi possível adiar: ${e.message}",
@@ -121,6 +175,10 @@ class MedicationAlarmActivity : Activity() {
                 MedicationAlarmService::class.java
             ).apply {
                 action = MedicationAlarmService.ACTION_STOP
+
+                // Identifica exatamente qual alarme
+                // o usuário está desligando.
+                putExtra("alarmeId", alarmeId)
             }
         )
     }

@@ -7,10 +7,13 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import org.json.JSONObject
 import java.util.Calendar
 
 object AlarmScheduleStore {
+
+    private const val TAG = "LembraFacilAlarm"
 
     private const val PREFS =
         "lembrafacil_alarm_schedules_v2"
@@ -35,93 +38,66 @@ object AlarmScheduleStore {
         ) as AlarmManager
 
     // ==================================================
-    // INTERPRETAR FREQUÊNCIA
+    // FREQUÊNCIA
     // ==================================================
 
     fun intervalHours(raw: String): Int {
-
         val value = raw.trim()
             .lowercase()
             .replace(Regex("\\s+"), " ")
 
-        // Uma vez ao dia.
-        if (
-            value in setOf(
-                "1",
-                "1 vez",
-                "1 vez ao dia",
-                "uma vez ao dia",
-                "diariamente",
-                "diário",
-                "diaria",
-                "diária",
-                "todos os dias",
-                "24h",
-                "24 horas"
-            )
-        ) {
-            return 24
-        }
+        val daily = mapOf(
+            "1" to 24,
+            "1 vez" to 24,
+            "1 vez ao dia" to 24,
+            "uma vez ao dia" to 24,
+            "diariamente" to 24,
+            "diário" to 24,
+            "diaria" to 24,
+            "diária" to 24,
+            "todos os dias" to 24,
+            "24h" to 24,
+            "24 horas" to 24,
+            "2" to 12,
+            "2 vezes" to 12,
+            "2 vezes ao dia" to 12,
+            "3" to 8,
+            "3 vezes" to 8,
+            "3 vezes ao dia" to 8,
+            "4" to 6,
+            "4 vezes" to 6,
+            "4 vezes ao dia" to 6
+        )
 
-        // Duas vezes ao dia.
-        if (
-            value in setOf(
-                "2",
-                "2 vezes",
-                "2 vezes ao dia",
-                "12h",
-                "12 horas"
-            )
-        ) {
-            return 12
-        }
+        daily[value]?.let { return it }
 
-        // Três vezes ao dia.
-        if (
-            value in setOf(
-                "3",
-                "3 vezes",
-                "3 vezes ao dia",
-                "8h",
-                "8 horas"
-            )
-        ) {
-            return 8
-        }
-
-        // Quatro vezes ao dia.
-        if (
-            value in setOf(
-                "4",
-                "4 vezes",
-                "4 vezes ao dia",
-                "6h",
-                "6 horas"
-            )
-        ) {
-            return 6
-        }
-
-        // Exemplo: 8 em 8 horas.
-        val intervalo = Regex(
-            "^(6|8|12|24) em (6|8|12|24) horas?$"
+        val repeated = Regex(
+            "^(\\d{1,2}) em (\\d{1,2}) horas?$"
         ).matchEntire(value)
 
-        if (
-            intervalo != null &&
-            intervalo.groupValues[1] ==
-                intervalo.groupValues[2]
-        ) {
-            return intervalo.groupValues[1].toInt()
+        if (repeated != null) {
+            val a = repeated.groupValues[1].toInt()
+            val b = repeated.groupValues[2].toInt()
+
+            require(a == b && a in 1..12) {
+                "Intervalo deve ser de 1 a 12 horas"
+            }
+
+            return a
         }
 
-        // Exemplo: a cada 8 horas.
-        val cada = Regex(
-            "^a cada (6|8|12|24) horas?$"
+        val simple = Regex(
+            "^(?:a cada )?(\\d{1,2})\\s*(h|horas?|hrs?)$"
         ).matchEntire(value)
 
-        if (cada != null) {
-            return cada.groupValues[1].toInt()
+        if (simple != null) {
+            val hours = simple.groupValues[1].toInt()
+
+            require(hours in 1..12) {
+                "Intervalo deve ser de 1 a 12 horas"
+            }
+
+            return hours
         }
 
         throw IllegalArgumentException(
@@ -130,16 +106,13 @@ object AlarmScheduleStore {
     }
 
     // ==================================================
-    // INTERPRETAR DURAÇÃO
+    // DURAÇÃO
     // ==================================================
 
     private fun durationDays(raw: String): Int {
-
-        val value = raw.trim().lowercase()
-
         val match = Regex(
             "^(\\d{1,4})(?:\\s*dias?)?$"
-        ).matchEntire(value)
+        ).matchEntire(raw.trim().lowercase())
             ?: throw IllegalArgumentException(
                 "Duração não reconhecida: $raw"
             )
@@ -154,14 +127,12 @@ object AlarmScheduleStore {
     }
 
     // ==================================================
-    // VERIFICAR PERMISSÃO
+    // PERMISSÃO
     // ==================================================
 
     private fun checkPermission(context: Context) {
-
         if (
-            Build.VERSION.SDK_INT >=
-                Build.VERSION_CODES.S &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             !manager(context).canScheduleExactAlarms()
         ) {
             throw IllegalStateException(
@@ -171,7 +142,7 @@ object AlarmScheduleStore {
     }
 
     // ==================================================
-    // IDENTIFICAR ALARMES
+    // INTENTS INDIVIDUAIS
     // ==================================================
 
     private fun alarmIntent(
@@ -179,12 +150,10 @@ object AlarmScheduleStore {
         id: Int,
         snooze: Boolean
     ): Intent {
-
         return Intent(
             context,
             MedicationAlarmReceiver::class.java
         ).apply {
-
             action = if (snooze) {
                 ACTION_SNOOZE
             } else {
@@ -204,29 +173,19 @@ object AlarmScheduleStore {
         snooze: Boolean,
         flags: Int
     ): PendingIntent? {
-
         return PendingIntent.getBroadcast(
             context,
             id,
-            alarmIntent(
-                context,
-                id,
-                snooze
-            ),
+            alarmIntent(context, id, snooze),
             flags or PendingIntent.FLAG_IMMUTABLE
         )
     }
-
-    // ==================================================
-    // CANCELAR PENDING INTENT
-    // ==================================================
 
     private fun cancelPending(
         context: Context,
         id: Int,
         snooze: Boolean
     ) {
-
         val pi = pending(
             context,
             id,
@@ -235,12 +194,11 @@ object AlarmScheduleStore {
         ) ?: return
 
         manager(context).cancel(pi)
-
         pi.cancel()
     }
 
     // ==================================================
-    // SALVAR PROGRAMAÇÃO
+    // ARMAZENAMENTO
     // ==================================================
 
     private fun save(
@@ -248,87 +206,89 @@ object AlarmScheduleStore {
         id: Int,
         data: JSONObject
     ) {
-
         check(
             prefs(context).edit()
-                .putString(
-                    key(id),
-                    data.toString()
-                )
+                .putString(key(id), data.toString())
                 .commit()
         ) {
             "Falha ao salvar programação"
         }
     }
 
-    // ==================================================
-    // CONSULTAR PROGRAMAÇÃO
-    // ==================================================
-
     fun get(
         context: Context,
         id: Int
     ): JSONObject? {
-
         return try {
-
             prefs(context)
-                .getString(
-                    key(id),
-                    null
-                )
-                ?.let {
-                    JSONObject(it)
-                }
-
-        } catch (_: Exception) {
+                .getString(key(id), null)
+                ?.let { JSONObject(it) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao consultar alarme $id", e)
             null
         }
     }
 
     // ==================================================
-    // CALCULAR FIM DO TRATAMENTO
+    // FIM DO TRATAMENTO
     // ==================================================
 
     private fun endExclusive(
         first: Long,
         days: Int
     ): Long {
-
         return Calendar.getInstance().apply {
-
             timeInMillis = first
 
-            set(
-                Calendar.HOUR_OF_DAY,
-                0
-            )
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
 
-            set(
-                Calendar.MINUTE,
-                0
-            )
-
-            set(
-                Calendar.SECOND,
-                0
-            )
-
-            set(
-                Calendar.MILLISECOND,
-                0
-            )
-
-            add(
-                Calendar.DAY_OF_YEAR,
-                days
-            )
-
+            add(Calendar.DAY_OF_YEAR, days)
         }.timeInMillis
     }
 
     // ==================================================
-    // CADASTRAR PROGRAMAÇÃO
+    // PENDING INTENT DE AGENDAMENTO
+    // ==================================================
+
+    private fun schedule(
+        context: Context,
+        data: JSONObject
+    ) {
+        checkPermission(context)
+
+        val id = data.getInt("id")
+        val next = data.getLong("next")
+        val end = data.getLong("end")
+
+        if (next >= end) {
+            Log.d(TAG, "Tratamento encerrado: $id")
+            return
+        }
+
+        val pi = pending(
+            context,
+            id,
+            false,
+            PendingIntent.FLAG_UPDATE_CURRENT
+        ) ?: error("PendingIntent indisponível")
+
+        manager(context).setExactAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            next,
+            pi
+        )
+
+        Log.i(
+            TAG,
+            "ALARME AGENDADO id=$id proximo=$next"
+        )
+    }
+
+    // ==================================================
+    // CRIAR ALARME
     // ==================================================
 
     fun create(
@@ -340,195 +300,114 @@ object AlarmScheduleStore {
         duration: String,
         first: Long
     ) {
-
-        require(
-            id > 0 &&
-            name.isNotBlank()
-        ) {
+        require(id > 0 && name.isNotBlank()) {
             "Medicamento inválido"
         }
 
-        require(
-            first > System.currentTimeMillis()
-        ) {
+        require(first > System.currentTimeMillis()) {
             "Primeiro horário precisa estar no futuro"
         }
 
-        val hours = intervalHours(
-            frequency
-        )
+        val hours = intervalHours(frequency)
+        val days = durationDays(duration)
 
-        val days = durationDays(
-            duration
-        )
-
-        val parts = Regex(
+        val match = Regex(
             "^(\\d{2}):(\\d{2})$"
-        ).matchEntire(
-            time.trim()
-        ) ?: throw IllegalArgumentException(
-            "Horário deve estar em HH:MM"
-        )
+        ).matchEntire(time.trim())
+            ?: throw IllegalArgumentException(
+                "Horário deve estar em HH:MM"
+            )
 
-        val h = parts.groupValues[1].toInt()
-        val m = parts.groupValues[2].toInt()
+        val h = match.groupValues[1].toInt()
+        val m = match.groupValues[2].toInt()
 
-        require(
-            h in 0..23 &&
-            m in 0..59
-        ) {
+        require(h in 0..23 && m in 0..59) {
             "Horário inválido"
         }
 
-        checkPermission(
-            context
-        )
+        checkPermission(context)
 
-        val end = endExclusive(
-            first,
-            days
-        )
+        val end = endExclusive(first, days)
 
-        require(
-            first < end
-        ) {
+        require(first < end) {
             "Primeiro alarme fora da duração"
         }
 
         val data = JSONObject().apply {
-
-            put(
-                "id",
-                id
-            )
-
-            put(
-                "name",
-                name
-            )
-
-            put(
-                "time",
-                time
-            )
-
-            put(
-                "hours",
-                hours
-            )
-
-            put(
-                "first",
-                first
-            )
-
-            put(
-                "next",
-                first
-            )
-
-            put(
-                "end",
-                end
-            )
+            put("id", id)
+            put("name", name)
+            put("time", time)
+            put("hours", hours)
+            put("first", first)
+            put("next", first)
+            put("end", end)
         }
 
-        cancel(
-            context,
-            id
-        )
+        // Mantém a programação anterior para
+        // restaurá-la caso o novo agendamento falhe.
+        val previous = get(context, id)
 
-        save(
-            context,
-            id,
-            data
-        )
+        try {
+            schedule(context, data)
+            save(context, id, data)
 
-        schedule(
-            context,
-            data
-        )
+            Log.i(
+                TAG,
+                "MEDICAMENTO AGENDADO id=$id nome=$name"
+            )
+        } catch (e: Exception) {
+            Log.e(
+                TAG,
+                "Falha ao agendar medicamento $id",
+                e
+            )
+
+            // Se havia programação anterior,
+            // tenta restaurá-la.
+            if (previous != null) {
+                try {
+                    schedule(context, previous)
+                    save(context, id, previous)
+                } catch (restoreError: Exception) {
+                    Log.e(
+                        TAG,
+                        "Falha ao restaurar alarme $id",
+                        restoreError
+                    )
+                }
+            } else {
+                cancelPending(context, id, false)
+                prefs(context).edit()
+                    .remove(key(id))
+                    .commit()
+            }
+
+            throw e
+        }
+
+        // Um cadastro novo substitui somente o
+        // adiamento pendente deste medicamento.
+        cancelPending(context, id, true)
     }
 
     // ==================================================
-    // PROGRAMAR PRÓXIMO ALARME
-    // ==================================================
-
-    private fun schedule(
-        context: Context,
-        data: JSONObject
-    ) {
-
-        checkPermission(
-            context
-        )
-
-        val id = data.getInt(
-            "id"
-        )
-
-        val next = data.getLong(
-            "next"
-        )
-
-        val end = data.getLong(
-            "end"
-        )
-
-        if (
-            next >= end
-        ) {
-            return
-        }
-
-        val pi = pending(
-            context,
-            id,
-            false,
-            PendingIntent.FLAG_UPDATE_CURRENT
-        ) ?: error(
-            "PendingIntent indisponível"
-        )
-
-        manager(context)
-            .setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                next,
-                pi
-            )
-    }
-
-    // ==================================================
-    // CALCULAR PRÓXIMA DOSE
+    // PRÓXIMA DOSE
     // ==================================================
 
     private fun nextAfter(
         data: JSONObject,
         now: Long
     ): Long {
+        val first = data.getLong("first")
+        val hours = data.getInt("hours")
 
-        val first = data.getLong(
-            "first"
-        )
-
-        val hours = data.getInt(
-            "hours"
-        )
-
-        if (
-            hours == 24
-        ) {
-
+        if (hours == 24) {
             val calendar =
                 Calendar.getInstance().apply {
-
                     timeInMillis = first
                 }
 
-            while (
-                calendar.timeInMillis <= now
-            ) {
-
+            while (calendar.timeInMillis <= now) {
                 calendar.add(
                     Calendar.DAY_OF_YEAR,
                     1
@@ -538,103 +417,87 @@ object AlarmScheduleStore {
             return calendar.timeInMillis
         }
 
-        val step =
-            hours * 60L * 60L * 1000L
+        val step = hours * 60L * 60L * 1000L
 
-        val intervals =
-            if (
-                now < first
-            ) {
-                0L
-            } else {
-                (
-                    (now - first) / step
-                ) + 1
-            }
+        val intervals = if (now < first) {
+            0L
+        } else {
+            ((now - first) / step) + 1
+        }
 
-        return first +
-            intervals * step
+        return first + intervals * step
     }
 
     // ==================================================
-    // QUANDO O ALARME TOCAR
+    // DISPARO
     // ==================================================
 
     fun fired(
         context: Context,
         id: Int
     ): JSONObject? {
+        val data = get(context, id)
+            ?: run {
+                Log.w(
+                    TAG,
+                    "Alarme recebido sem cadastro: $id"
+                )
+                return null
+            }
 
-        val data = get(
-            context,
-            id
-        ) ?: return null
-
-        val now =
-            System.currentTimeMillis()
-
-        val due = data.optLong(
-            "next",
-            0
-        )
+        val now = System.currentTimeMillis()
+        val due = data.optLong("next", 0L)
 
         if (
             due <= 0 ||
             due > now + 90_000L ||
             now - due > 30 * 60_000L
         ) {
+            Log.w(
+                TAG,
+                "Disparo ignorado id=$id due=$due now=$now"
+            )
             return null
         }
 
-        val next = nextAfter(
-            data,
-            now
+        Log.i(
+            TAG,
+            "ALARME DISPAROU id=$id"
         )
 
-        data.put(
-            "next",
-            next
-        )
+        val next = nextAfter(data, now)
 
-        save(
-            context,
-            id,
-            data
-        )
+        data.put("next", next)
+        save(context, id, data)
 
-        if (
-            next < data.getLong(
-                "end"
-            )
-        ) {
-
-            schedule(
-                context,
-                data
-            )
+        if (next < data.getLong("end")) {
+            try {
+                schedule(context, data)
+            } catch (e: Exception) {
+                Log.e(
+                    TAG,
+                    "Falha ao programar próxima dose $id",
+                    e
+                )
+            }
         }
 
         return data
     }
 
     // ==================================================
-    // ADIAR POR CINCO MINUTOS
+    // ADIAR CINCO MINUTOS
     // ==================================================
 
     fun snooze(
         context: Context,
         id: Int
     ): Boolean {
-
-        if (
-            get(context, id) == null
-        ) {
+        if (get(context, id) == null) {
             return false
         }
 
-        checkPermission(
-            context
-        )
+        checkPermission(context)
 
         val pi = pending(
             context,
@@ -643,66 +506,51 @@ object AlarmScheduleStore {
             PendingIntent.FLAG_UPDATE_CURRENT
         ) ?: return false
 
-        manager(context)
-            .setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                System.currentTimeMillis() +
-                    5 * 60_000L,
-                pi
-            )
+        manager(context).setExactAndAllowWhileIdle(
+            AlarmManager.RTC_WAKEUP,
+            System.currentTimeMillis() +
+                5 * 60_000L,
+            pi
+        )
+
+        Log.i(TAG, "ALARME ADIADO id=$id")
 
         return true
     }
 
     // ==================================================
-    // CANCELAR ALARME
+    // CANCELAR
     // ==================================================
 
     fun cancel(
         context: Context,
         id: Int
     ) {
+        cancelPending(context, id, false)
+        cancelPending(context, id, true)
 
-        cancelPending(
+        // Compatibilidade com alarmes antigos.
+        val legacy = PendingIntent.getBroadcast(
             context,
             id,
-            false
-        )
-
-        cancelPending(
-            context,
-            id,
-            true
-        )
-
-        // Cancela também alarmes da versão antiga.
-        val legacy =
-            PendingIntent.getBroadcast(
+            Intent(
                 context,
-                id,
-                Intent(
-                    context,
-                    MedicationAlarmReceiver::class.java
-                ),
-                PendingIntent.FLAG_NO_CREATE or
-                    PendingIntent.FLAG_IMMUTABLE
-            )
+                MedicationAlarmReceiver::class.java
+            ),
+            PendingIntent.FLAG_NO_CREATE or
+                PendingIntent.FLAG_IMMUTABLE
+        )
 
-        if (
-            legacy != null
-        ) {
-
-            manager(context)
-                .cancel(legacy)
-
+        if (legacy != null) {
+            manager(context).cancel(legacy)
             legacy.cancel()
         }
 
         prefs(context).edit()
-            .remove(
-                key(id)
-            )
+            .remove(key(id))
             .commit()
+
+        Log.i(TAG, "ALARME CANCELADO id=$id")
     }
 
     // ==================================================
@@ -712,62 +560,49 @@ object AlarmScheduleStore {
     fun restore(
         context: Context
     ): Boolean {
+        checkPermission(context)
 
-        checkPermission(
-            context
-        )
+        val now = System.currentTimeMillis()
 
-        val ids =
-            prefs(context)
-                .all
-                .keys
-                .filter {
-                    it.startsWith(
-                        "med_"
-                    )
-                }
+        val ids = prefs(context)
+            .all.keys
+            .filter { it.startsWith("med_") }
 
-        for (
-            storedKey in ids
-        ) {
-
+        for (storedKey in ids) {
             val id = storedKey
-                .removePrefix(
-                    "med_"
-                )
+                .removePrefix("med_")
                 .toIntOrNull()
                 ?: continue
 
-            val data = get(
-                context,
-                id
-            ) ?: continue
+            try {
+                val data = get(context, id)
+                    ?: continue
 
-            val next = nextAfter(
-                data,
-                System.currentTimeMillis()
-            )
+                val currentNext =
+                    data.optLong("next", 0L)
 
-            data.put(
-                "next",
-                next
-            )
+                val next = if (currentNext > now) {
+                    currentNext
+                } else {
+                    nextAfter(data, now)
+                }
 
-            save(
-                context,
-                id,
-                data
-            )
+                data.put("next", next)
 
-            if (
-                next < data.getLong(
-                    "end"
-                )
-            ) {
+                if (next < data.getLong("end")) {
+                    schedule(context, data)
+                    save(context, id, data)
 
-                schedule(
-                    context,
-                    data
+                    Log.i(
+                        TAG,
+                        "ALARME RESTAURADO id=$id"
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e(
+                    TAG,
+                    "Falha ao restaurar alarme $id",
+                    e
                 )
             }
         }
