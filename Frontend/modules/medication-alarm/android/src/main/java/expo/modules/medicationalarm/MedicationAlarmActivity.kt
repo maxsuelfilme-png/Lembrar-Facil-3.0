@@ -1,4 +1,3 @@
-
 package expo.modules.medicationalarm
 
 import android.app.Activity
@@ -23,36 +22,30 @@ class MedicationAlarmActivity : Activity() {
     private var medicamento = "Medicamento"
     private var horario = "--:--"
     private var alarmeId = 0
+    private var processandoAcao = false
 
     private lateinit var descricao: TextView
+    private lateinit var botaoDesligar: Button
+    private lateinit var botaoAdiar: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         configurarTelaBloqueada()
         atualizarDados(intent)
         construirTela()
-
-        Log.i(
-            TAG,
-            "Tela aberta: id=$alarmeId medicamento=$medicamento"
-        )
+        Log.i(TAG, "Tela aberta: id=$alarmeId medicamento=$medicamento")
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-
         setIntent(intent)
         atualizarDados(intent)
-
+        processandoAcao = false
         if (::descricao.isInitialized) {
             descricao.text = "$medicamento\n$horario"
         }
-
-        Log.i(
-            TAG,
-            "Tela atualizada: id=$alarmeId medicamento=$medicamento"
-        )
+        atualizarBotoes()
+        Log.i(TAG, "Tela atualizada: id=$alarmeId medicamento=$medicamento")
     }
 
     private fun configurarTelaBloqueada() {
@@ -66,19 +59,14 @@ class MedicationAlarmActivity : Activity() {
                     WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             )
         }
-
-        window.addFlags(
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-        )
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     private fun atualizarDados(intent: Intent?) {
         medicamento = intent?.getStringExtra("medicamento")
-            ?: "Medicamento"
-
+            ?.takeIf { it.isNotBlank() } ?: "Medicamento"
         horario = intent?.getStringExtra("horario")
-            ?: "--:--"
-
+            ?.takeIf { it.isNotBlank() } ?: "--:--"
         alarmeId = intent?.getIntExtra("alarmeId", 0) ?: 0
     }
 
@@ -105,81 +93,97 @@ class MedicationAlarmActivity : Activity() {
             setPadding(0, 35, 0, 45)
         }
 
-        val desligar = Button(this).apply {
+        botaoDesligar = Button(this).apply {
             text = "Desligar"
-
             setOnClickListener {
-                Log.i(
-                    TAG,
-                    "Botão Desligar: id=$alarmeId"
-                )
-
-                pararDespertador()
-                finish()
+                if (processandoAcao) return@setOnClickListener
+                if (!validarAlarme()) return@setOnClickListener
+                processandoAcao = true
+                atualizarBotoes()
+                if (pararDespertador()) {
+                    Log.i(TAG, "Alarme desligado pela tela: id=$alarmeId")
+                    finish()
+                } else {
+                    processandoAcao = false
+                    atualizarBotoes()
+                }
             }
         }
 
-        val adiar = Button(this).apply {
+        botaoAdiar = Button(this).apply {
             text = "Adiar 5 minutos"
-
             setOnClickListener {
+                if (processandoAcao) return@setOnClickListener
+                if (!validarAlarme()) return@setOnClickListener
+                processandoAcao = true
+                atualizarBotoes()
                 try {
                     val agendado = AlarmScheduleStore.snooze(
                         this@MedicationAlarmActivity,
                         alarmeId
                     )
-
                     if (agendado) {
-                        Log.i(
-                            TAG,
-                            "Alarme adiado: id=$alarmeId"
-                        )
-
-                        pararDespertador()
-                        finish()
+                        Log.i(TAG, "Alarme adiado: id=$alarmeId")
+                        // O adiamento já foi agendado: não tente agendá-lo de novo.
+                        if (pararDespertador()) {
+                            finish()
+                        } else {
+                            // O novo disparo continua agendado mesmo se o
+                            // serviço não puder ser encerrado agora.
+                            finish()
+                        }
                     } else {
-                        Toast.makeText(
-                            this@MedicationAlarmActivity,
-                            "Alarme não encontrado",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        mostrarMensagem("Não foi possível localizar este alarme")
+                        processandoAcao = false
+                        atualizarBotoes()
                     }
                 } catch (e: Exception) {
-                    Log.e(
-                        TAG,
-                        "Erro ao adiar alarme $alarmeId",
-                        e
-                    )
-
-                    Toast.makeText(
-                        this@MedicationAlarmActivity,
-                        "Não foi possível adiar: ${e.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    Log.e(TAG, "Erro ao adiar alarme $alarmeId", e)
+                    mostrarMensagem("Não foi possível adiar o alarme")
+                    processandoAcao = false
+                    atualizarBotoes()
                 }
             }
         }
 
         layout.addView(titulo)
         layout.addView(descricao)
-        layout.addView(desligar)
-        layout.addView(adiar)
-
+        layout.addView(botaoDesligar)
+        layout.addView(botaoAdiar)
         setContentView(layout)
+        atualizarBotoes()
     }
 
-    private fun pararDespertador() {
-        startService(
-            Intent(
-                this,
-                MedicationAlarmService::class.java
-            ).apply {
-                action = MedicationAlarmService.ACTION_STOP
+    private fun validarAlarme(): Boolean {
+        if (alarmeId > 0) return true
+        Log.w(TAG, "Ação recusada: ID de alarme inválido ($alarmeId)")
+        mostrarMensagem("Identificação do alarme inválida")
+        return false
+    }
 
-                // Identifica exatamente qual alarme
-                // o usuário está desligando.
-                putExtra("alarmeId", alarmeId)
-            }
-        )
+    private fun atualizarBotoes() {
+        val habilitados = !processandoAcao && alarmeId > 0
+        if (::botaoDesligar.isInitialized) botaoDesligar.isEnabled = habilitados
+        if (::botaoAdiar.isInitialized) botaoAdiar.isEnabled = habilitados
+    }
+
+    private fun mostrarMensagem(mensagem: String) {
+        Toast.makeText(this, mensagem, Toast.LENGTH_LONG).show()
+    }
+
+    private fun pararDespertador(): Boolean {
+        return try {
+            startService(
+                Intent(this, MedicationAlarmService::class.java).apply {
+                    action = MedicationAlarmService.ACTION_STOP
+                    putExtra("alarmeId", alarmeId)
+                }
+            )
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao enviar comando Desligar para $alarmeId", e)
+            mostrarMensagem("Não foi possível desligar o despertador")
+            false
+        }
     }
 }

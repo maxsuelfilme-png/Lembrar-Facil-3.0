@@ -1,8 +1,8 @@
-
 {
   "expo": {
     "name": "Lembra-Fácil",
     "slug": "mobile",
+    "owner": "maxsuelgordi",
     "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/lembrafacil-icon.png",
@@ -20,6 +20,8 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.maxsueljds.lembrafacil",
       "permissions": [
+        "POST_NOTIFICATIONS",
+        "SCHEDULE_EXACT_ALARM",
         "POST_NOTIFICATIONS",
         "SCHEDULE_EXACT_ALARM"
       ]
@@ -67,14 +69,14 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "d7541c6b-d908-432e-8fea-406f6e925f37"
+        "projectId": "850352c9-32aa-49b7-a7bc-8b54d0b31f22"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/d7541c6b-d908-432e-8fea-406f6e925f37"
+      "url": "https://u.expo.dev/850352c9-32aa-49b7-a7bc-8b54d0b31f22"
     }
   }
 }

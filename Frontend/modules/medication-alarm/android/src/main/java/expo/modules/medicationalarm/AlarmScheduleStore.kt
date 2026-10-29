@@ -1,4 +1,3 @@
-
 package expo.modules.medicationalarm
 
 import android.app.AlarmManager
@@ -70,6 +69,21 @@ object AlarmScheduleStore {
         )
 
         daily[value]?.let { return it }
+
+        // Aceita intervalos no formato 1/1, 2/2 ... 12/12.
+        val slash = Regex("^(\\d{1,2})\\s*/\\s*(\\d{1,2})$")
+            .matchEntire(value)
+
+        if (slash != null) {
+            val a = slash.groupValues[1].toInt()
+            val b = slash.groupValues[2].toInt()
+
+            require(a == b && a in 1..12) {
+                "Intervalo deve ser de 1 a 12 horas"
+            }
+
+            return a
+        }
 
         val repeated = Regex(
             "^(\\d{1,2}) em (\\d{1,2}) horas?$"
@@ -267,6 +281,9 @@ object AlarmScheduleStore {
             Log.d(TAG, "Tratamento encerrado: $id")
             return
         }
+        require(next > System.currentTimeMillis()) {
+            "Horário de alarme não está no futuro: id=$id"
+        }
 
         val pi = pending(
             context,
@@ -366,7 +383,11 @@ object AlarmScheduleStore {
             // tenta restaurá-la.
             if (previous != null) {
                 try {
-                    schedule(context, previous)
+                    val oldNext = previous.optLong("next", 0L)
+                    if (oldNext > System.currentTimeMillis() &&
+                        oldNext < previous.optLong("end", 0L)) {
+                        schedule(context, previous)
+                    }
                     save(context, id, previous)
                 } catch (restoreError: Exception) {
                     Log.e(
@@ -432,56 +453,65 @@ object AlarmScheduleStore {
     // DISPARO
     // ==================================================
 
-    fun fired(
-        context: Context,
-        id: Int
-    ): JSONObject? {
-        val data = get(context, id)
-            ?: run {
-                Log.w(
-                    TAG,
-                    "Alarme recebido sem cadastro: $id"
-                )
-                return null
-            }
-
-        val now = System.currentTimeMillis()
-        val due = data.optLong("next", 0L)
-
-        if (
-            due <= 0 ||
-            due > now + 90_000L ||
-            now - due > 30 * 60_000L
-        ) {
-            Log.w(
-                TAG,
-                "Disparo ignorado id=$id due=$due now=$now"
-            )
+    @Synchronized
+    fun fired(context: Context, id: Int): JSONObject? {
+        val data = get(context, id) ?: run {
+            Log.w(TAG, "Alarme recebido sem cadastro: $id")
             return null
         }
 
-        Log.i(
-            TAG,
-            "ALARME DISPAROU id=$id"
-        )
+        val now = System.currentTimeMillis()
+        val due = data.optLong("next", 0L)
+        val end = data.optLong("end", 0L)
 
-        val next = nextAfter(data, now)
-
-        data.put("next", next)
-        save(context, id, data)
-
-        if (next < data.getLong("end")) {
-            try {
-                schedule(context, data)
-            } catch (e: Exception) {
-                Log.e(
-                    TAG,
-                    "Falha ao programar próxima dose $id",
-                    e
-                )
-            }
+        if (due <= 0L || end <= 0L || due >= end) {
+            Log.w(TAG, "Alarme sem dose válida: id=$id")
+            cancelPending(context, id, false)
+            return null
         }
 
+        if (due > now + 90_000L || now - due > 30L * 60_000L) {
+            Log.w(TAG, "Disparo fora da janela: id=$id due=$due now=$now")
+            // Se o disparo chegou muito tarde, tenta recuperar a próxima dose.
+            if (now - due > 30L * 60_000L) {
+                try {
+                    val next = nextAfter(data, now)
+                    val updated = JSONObject(data.toString()).apply {
+                        put("next", next)
+                    }
+                    if (next < end) {
+                        schedule(context, updated)
+                    }
+                    save(context, id, updated)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Falha ao recuperar dose atrasada $id", e)
+                }
+            }
+            return null
+        }
+
+        Log.i(TAG, "ALARME DISPAROU id=$id")
+        val next = nextAfter(data, now)
+        val updated = JSONObject(data.toString()).apply {
+            put("next", next)
+        }
+
+        try {
+            if (next < end) {
+                // Agenda antes de registrar o novo horário.
+                schedule(context, updated)
+                Log.i(TAG, "PRÓXIMA DOSE id=$id next=$next")
+            } else {
+                Log.i(TAG, "ÚLTIMA DOSE DO TRATAMENTO id=$id")
+            }
+            save(context, id, updated)
+        } catch (e: Exception) {
+            Log.e(TAG, "Falha ao reagendar próxima dose $id", e)
+            // Mantém o horário anterior no armazenamento quando a
+            // tentativa de agendamento falhar, para recuperação posterior.
+        }
+
+        // O alarme atual deve tocar mesmo se o próximo falhar.
         return data
     }
 
@@ -489,32 +519,29 @@ object AlarmScheduleStore {
     // ADIAR CINCO MINUTOS
     // ==================================================
 
-    fun snooze(
-        context: Context,
-        id: Int
-    ): Boolean {
-        if (get(context, id) == null) {
+    @Synchronized
+    fun snooze(context: Context, id: Int): Boolean {
+        val data = get(context, id) ?: return false
+        checkPermission(context)
+
+        val now = System.currentTimeMillis()
+        val end = data.optLong("end", 0L)
+        val nextSnooze = now + 5L * 60_000L
+        // Permite adiar a última dose disparada, mas não tratamentos
+        // encerrados há muito tempo.
+        if (end <= 0L || now > end + 30L * 60_000L) {
+            Log.w(TAG, "Adiamento recusado para tratamento encerrado: $id")
             return false
         }
 
-        checkPermission(context)
-
         val pi = pending(
-            context,
-            id,
-            true,
-            PendingIntent.FLAG_UPDATE_CURRENT
+            context, id, true, PendingIntent.FLAG_UPDATE_CURRENT
         ) ?: return false
 
         manager(context).setExactAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP,
-            System.currentTimeMillis() +
-                5 * 60_000L,
-            pi
+            AlarmManager.RTC_WAKEUP, nextSnooze, pi
         )
-
-        Log.i(TAG, "ALARME ADIADO id=$id")
-
+        Log.i(TAG, "ALARME ADIADO id=$id para=$nextSnooze")
         return true
     }
 
@@ -557,29 +584,28 @@ object AlarmScheduleStore {
     // RESTAURAR ALARMES
     // ==================================================
 
-    fun restore(
-        context: Context
-    ): Boolean {
+    @Synchronized
+    fun restore(context: Context): Boolean {
         checkPermission(context)
-
         val now = System.currentTimeMillis()
-
-        val ids = prefs(context)
-            .all.keys
+        val ids = prefs(context).all.keys
             .filter { it.startsWith("med_") }
+        var allOk = true
 
         for (storedKey in ids) {
-            val id = storedKey
-                .removePrefix("med_")
-                .toIntOrNull()
+            val id = storedKey.removePrefix("med_").toIntOrNull()
                 ?: continue
-
             try {
-                val data = get(context, id)
-                    ?: continue
+                val data = get(context, id) ?: continue
+                val end = data.optLong("end", 0L)
+                val currentNext = data.optLong("next", 0L)
 
-                val currentNext =
-                    data.optLong("next", 0L)
+                if (end <= now || end <= 0L) {
+                    cancelPending(context, id, false)
+                    cancelPending(context, id, true)
+                    Log.i(TAG, "Tratamento encerrado; sem restauração: $id")
+                    continue
+                }
 
                 val next = if (currentNext > now) {
                     currentNext
@@ -587,26 +613,22 @@ object AlarmScheduleStore {
                     nextAfter(data, now)
                 }
 
-                data.put("next", next)
-
-                if (next < data.getLong("end")) {
-                    schedule(context, data)
-                    save(context, id, data)
-
-                    Log.i(
-                        TAG,
-                        "ALARME RESTAURADO id=$id"
-                    )
+                if (next < end) {
+                    val updated = JSONObject(data.toString()).apply {
+                        put("next", next)
+                    }
+                    schedule(context, updated)
+                    save(context, id, updated)
+                    Log.i(TAG, "ALARME RESTAURADO id=$id next=$next")
+                } else {
+                    cancelPending(context, id, false)
+                    Log.i(TAG, "Sem doses futuras para id=$id")
                 }
             } catch (e: Exception) {
-                Log.e(
-                    TAG,
-                    "Falha ao restaurar alarme $id",
-                    e
-                )
+                allOk = false
+                Log.e(TAG, "Falha ao restaurar alarme $id", e)
             }
         }
-
-        return true
+        return allOk
     }
 }

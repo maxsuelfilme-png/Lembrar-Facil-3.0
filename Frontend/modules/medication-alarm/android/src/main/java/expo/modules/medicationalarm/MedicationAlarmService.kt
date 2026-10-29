@@ -1,4 +1,3 @@
-
 package expo.modules.medicationalarm
 
 import android.app.Notification
@@ -21,335 +20,213 @@ class MedicationAlarmService : Service() {
 
     companion object {
         private const val TAG = "LembraFacilAlarm"
-
         const val CHANNEL_ID = "lembrafacil_alarme"
         const val NOTIFICATION_ID = 5001
         const val ACTION_STOP = "STOP_ALARM"
+        const val ACTION_SNOOZE = "SNOOZE_ALARM"
     }
 
     override fun onCreate() {
         super.onCreate()
         criarCanalNotificacao()
-
         Log.i(TAG, "Serviço do despertador criado")
     }
 
-    override fun onStartCommand(
-        intent: Intent?,
-        flags: Int,
-        startId: Int
-    ): Int {
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent == null) {
+            Log.w(TAG, "Serviço iniciado sem Intent")
+            stopSelfResult(startId)
+            return START_NOT_STICKY
+        }
 
-        if (intent?.action == ACTION_STOP) {
-
-            val idParaDesligar = intent.getIntExtra(
-                "alarmeId",
-                -1
-            )
-
-            if (
-                alarmeAtivoId != null &&
-                idParaDesligar != alarmeAtivoId
-            ) {
-                Log.w(
-                    TAG,
-                    "Comando Desligar ignorado: " +
-                        "id=$idParaDesligar ativo=$alarmeAtivoId"
-                )
-
+        if (intent.action == ACTION_STOP || intent.action == ACTION_SNOOZE) {
+            val solicitado = intent.getIntExtra("alarmeId", -1)
+            val ativo = alarmeAtivoId
+            if (ativo == null || solicitado != ativo) {
+                Log.w(TAG, "Ação ignorada: id=$solicitado ativo=$ativo")
                 return START_NOT_STICKY
             }
 
-            Log.i(
-                TAG,
-                "Desligando alarme id=$idParaDesligar"
-            )
+            if (intent.action == ACTION_SNOOZE) {
+                val adiado = try {
+                    AlarmScheduleStore.snooze(this, solicitado)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Não foi possível adiar o alarme $solicitado", e)
+                    false
+                }
+                if (!adiado) {
+                    Log.w(TAG, "Alarme não foi adiado: $solicitado")
+                    return START_NOT_STICKY
+                }
+                Log.i(TAG, "Alarme adiado por cinco minutos: $solicitado")
+            } else {
+                Log.i(TAG, "Alarme desligado: $solicitado")
+            }
 
             pararSom()
             alarmeAtivoId = null
-
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelfResult(startId)
-
             return START_NOT_STICKY
         }
 
-        if (intent == null) {
-            Log.w(TAG, "Serviço iniciado sem Intent")
+        val medicamento = intent.getStringExtra("medicamento") ?: "Medicamento"
+        val horario = intent.getStringExtra("horario") ?: "--:--"
+        val id = intent.getIntExtra("alarmeId", 0)
+        if (id <= 0) {
+            Log.e(TAG, "Alarme com ID inválido: $id")
+            stopSelfResult(startId)
             return START_NOT_STICKY
         }
 
-        val medicamento = intent.getStringExtra(
-            "medicamento"
-        ) ?: "Medicamento"
+        if (alarmeAtivoId != null && alarmeAtivoId != id) {
+            Log.w(TAG, "Novo alarme $id substituiu o alarme ativo $alarmeAtivoId")
+        }
 
-        val horario = intent.getStringExtra(
-            "horario"
-        ) ?: "--:--"
-
-        val alarmeId = intent.getIntExtra(
-            "alarmeId",
-            0
-        )
-
-        Log.i(
-            TAG,
-            "Recebido alarme id=$alarmeId " +
-                "medicamento=$medicamento horario=$horario"
-        )
-
-        // Se outro medicamento disparar enquanto
-        // o serviço está ativo, encerra o som anterior
-        // antes de iniciar o novo.
         pararSom()
-
-        alarmeAtivoId = alarmeId
-
-        val notificacao = criarNotificacao(
-            medicamento,
-            horario,
-            alarmeId
-        )
+        alarmeAtivoId = id
 
         try {
-            startForeground(
-                NOTIFICATION_ID,
-                notificacao
-            )
-
-            Log.i(
-                TAG,
-                "Notificação de alarme iniciada: $alarmeId"
-            )
-
+            val notificacao = criarNotificacao(medicamento, horario, id)
+            startForeground(NOTIFICATION_ID, notificacao)
+            Log.i(TAG, "Notificação foreground iniciada para id=$id")
             iniciarSom()
-
-        } catch (erro: Exception) {
-            Log.e(
-                TAG,
-                "Erro ao iniciar alarme $alarmeId",
-                erro
-            )
-
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao iniciar alarme id=$id", e)
             pararSom()
             alarmeAtivoId = null
             stopSelfResult(startId)
         }
-
         return START_NOT_STICKY
     }
 
     private fun criarCanalNotificacao() {
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-
             val canal = NotificationChannel(
                 CHANNEL_ID,
                 "Despertador de medicamentos",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Alarmes do LembraFácil"
-                lockscreenVisibility =
-                    Notification.VISIBILITY_PUBLIC
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                enableVibration(true)
             }
-
-            getSystemService(
-                NotificationManager::class.java
-            ).createNotificationChannel(canal)
+            getSystemService(NotificationManager::class.java)
+                .createNotificationChannel(canal)
         }
     }
 
-    private fun criarNotificacao(
-        medicamento: String,
-        horario: String,
-        alarmeId: Int
-    ): Notification {
-
-        val abrirTelaIntent = Intent(
-            this,
-            MedicationAlarmActivity::class.java
-        ).apply {
-
+    private fun criarNotificacao(medicamento: String, horario: String, id: Int): Notification {
+        val abrirTela = Intent(this, MedicationAlarmActivity::class.java).apply {
             putExtra("medicamento", medicamento)
             putExtra("horario", horario)
-            putExtra("alarmeId", alarmeId)
+            putExtra("alarmeId", id)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val abrirTelaPi = PendingIntent.getActivity(
+            this, id, abrirTela,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_CLEAR_TOP
+        val desligarPi = PendingIntent.getService(
+            this, id,
+            Intent(this, MedicationAlarmService::class.java).apply {
+                action = ACTION_STOP
+                putExtra("alarmeId", id)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val adiarPi = PendingIntent.getService(
+            this, id,
+            Intent(this, MedicationAlarmService::class.java).apply {
+                action = ACTION_SNOOZE
+                putExtra("alarmeId", id)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val manager = getSystemService(NotificationManager::class.java)
+        val telaCheiaPermitida = if (Build.VERSION.SDK_INT >= 34) {
+            manager.canUseFullScreenIntent()
+        } else {
+            true
+        }
+        if (!telaCheiaPermitida) {
+            Log.w(TAG, "Permissão de tela cheia indisponível; usuário pode abrir pelo aviso")
         }
 
-        val abrirTelaPendingIntent =
-            PendingIntent.getActivity(
-                this,
-                alarmeId,
-                abrirTelaIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or
-                    PendingIntent.FLAG_IMMUTABLE
-            )
-
-        val pararIntent = Intent(
-            this,
-            MedicationAlarmService::class.java
-        ).apply {
-
-            action = ACTION_STOP
-            putExtra("alarmeId", alarmeId)
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, CHANNEL_ID)
+        } else {
+            Notification.Builder(this)
         }
-
-        val pararPendingIntent =
-            PendingIntent.getService(
-                this,
-                alarmeId,
-                pararIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or
-                    PendingIntent.FLAG_IMMUTABLE
-            )
-
-        val builder =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                Notification.Builder(this, CHANNEL_ID)
-            } else {
-                Notification.Builder(this)
-            }
-
         return builder
             .setContentTitle("Hora do medicamento!")
             .setContentText("$medicamento - $horario")
-            .setSmallIcon(
-                android.R.drawable.ic_lock_idle_alarm
-            )
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setCategory(Notification.CATEGORY_ALARM)
-            .setVisibility(
-                Notification.VISIBILITY_PUBLIC
-            )
-            .setPriority(
-                Notification.PRIORITY_HIGH
-            )
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setPriority(Notification.PRIORITY_HIGH)
             .setOngoing(true)
             .setAutoCancel(false)
-            .setContentIntent(
-                abrirTelaPendingIntent
-            )
-            .setFullScreenIntent(
-                abrirTelaPendingIntent,
-                true
-            )
-            .addAction(
-                android.R.drawable.ic_media_pause,
-                "Desligar",
-                pararPendingIntent
-            )
+            .setContentIntent(abrirTelaPi)
+            .setFullScreenIntent(abrirTelaPi, telaCheiaPermitida)
+            .addAction(android.R.drawable.ic_media_pause, "Desligar", desligarPi)
+            .addAction(android.R.drawable.ic_popup_reminder, "Adiar 5 min", adiarPi)
             .build()
     }
 
     private fun iniciarSom() {
-
         try {
-
-            val uri =
-                RingtoneManager.getDefaultUri(
-                    RingtoneManager.TYPE_ALARM
-                ) ?: RingtoneManager.getDefaultUri(
-                    RingtoneManager.TYPE_NOTIFICATION
-                ) ?: throw IllegalStateException(
-                    "Nenhum toque de alarme disponível"
-                )
-
+            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                ?: throw IllegalStateException("Nenhum toque de alarme disponível")
             val player = MediaPlayer()
-
             try {
                 player.setAudioAttributes(
                     AudioAttributes.Builder()
-                        .setUsage(
-                            AudioAttributes.USAGE_ALARM
-                        )
-                        .setContentType(
-                            AudioAttributes
-                                .CONTENT_TYPE_SONIFICATION
-                        )
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .build()
                 )
-
-                player.setDataSource(
-                    applicationContext,
-                    uri
-                )
-
+                player.setDataSource(applicationContext, uri)
                 player.isLooping = true
                 player.prepare()
                 player.start()
-
                 mediaPlayer = player
-
-                Log.i(
-                    TAG,
-                    "SOM INICIADO id=$alarmeAtivoId"
-                )
-
-            } catch (erro: Exception) {
+                Log.i(TAG, "SOM INICIADO id=$alarmeAtivoId")
+            } catch (e: Exception) {
                 player.release()
-                throw erro
+                throw e
             }
-
-        } catch (erro: Exception) {
-
-            Log.e(
-                TAG,
-                "Erro ao reproduzir som do alarme",
-                erro
-            )
-
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao reproduzir som do alarme", e)
             pararSom()
         }
     }
 
     private fun pararSom() {
-
         val player = mediaPlayer
         mediaPlayer = null
-
         if (player != null) {
-
             try {
-                if (player.isPlaying) {
-                    player.stop()
-                }
-            } catch (erro: Exception) {
-                Log.w(
-                    TAG,
-                    "Erro ao parar reprodução",
-                    erro
-                )
+                if (player.isPlaying) player.stop()
+            } catch (e: Exception) {
+                Log.w(TAG, "Erro ao parar reprodução", e)
             }
-
             try {
                 player.release()
-            } catch (erro: Exception) {
-                Log.w(
-                    TAG,
-                    "Erro ao liberar MediaPlayer",
-                    erro
-                )
+            } catch (e: Exception) {
+                Log.w(TAG, "Erro ao liberar MediaPlayer", e)
             }
         }
-
-        Log.d(TAG, "Som encerrado")
     }
 
     override fun onDestroy() {
-
-        Log.i(
-            TAG,
-            "Serviço destruído; alarme=$alarmeAtivoId"
-        )
-
         pararSom()
         alarmeAtivoId = null
-
         super.onDestroy()
     }
 
-    override fun onBind(
-        intent: Intent?
-    ): IBinder? = null
+    override fun onBind(intent: Intent?): IBinder? = null
 }

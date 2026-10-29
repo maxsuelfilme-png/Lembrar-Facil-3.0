@@ -5,13 +5,11 @@ import { Platform } from "react-native";
 
 import type { Medicamento } from "./medicamentosService";
 
-const CHAVE_LEMBRETES =
-  "@lembrafacil:lembretes:idoso";
+const CHAVE_LEMBRETES = "@lembrafacil:lembretes:idoso";
 
 type LembretesSalvos = Record<string, string>;
 
-type ModuloNotificacoes =
-  typeof import("expo-notifications");
+type ModuloNotificacoes = typeof import("expo-notifications");
 
 let modulo: ModuloNotificacoes | null = null;
 
@@ -24,13 +22,13 @@ function obterNotificacoes(): ModuloNotificacoes | null {
     return null;
   }
 
+  // Expo Go não é utilizado para testar o módulo Kotlin.
   if (Constants.appOwnership === "expo") {
     return null;
   }
 
   if (!modulo) {
-    modulo =
-      require("expo-notifications") as ModuloNotificacoes;
+    modulo = require("expo-notifications") as ModuloNotificacoes;
 
     modulo.setNotificationHandler({
       handleNotification: async () => ({
@@ -46,21 +44,33 @@ function obterNotificacoes(): ModuloNotificacoes | null {
 }
 
 // ======================================================
-// ARMAZENAMENTO DOS IDS ANTIGOS
+// ARMAZENAMENTO DOS IDS DAS NOTIFICAÇÕES
 // ======================================================
 
 async function carregarIds(): Promise<LembretesSalvos> {
-  const salvo = await AsyncStorage.getItem(
-    CHAVE_LEMBRETES
-  );
+  const salvo = await AsyncStorage.getItem(CHAVE_LEMBRETES);
 
   if (!salvo) {
     return {};
   }
 
   try {
-    return JSON.parse(salvo) as LembretesSalvos;
-  } catch {
+    const dados = JSON.parse(salvo);
+
+    if (
+      dados &&
+      typeof dados === "object" &&
+      !Array.isArray(dados)
+    ) {
+      return dados as LembretesSalvos;
+    }
+
+    return {};
+  } catch (erro) {
+    console.warn(
+      "[LembraFácil] Erro ao carregar notificações:",
+      erro
+    );
     return {};
   }
 }
@@ -75,7 +85,64 @@ async function salvarIds(
 }
 
 // ======================================================
-// CANCELAR LEMBRETE EXPO ANTIGO
+// CONFIGURAR CANAL DE NOTIFICAÇÕES ANDROID
+// ======================================================
+
+async function configurarCanalAndroid(): Promise<void> {
+  const Notifications = obterNotificacoes();
+
+  if (!Notifications || Platform.OS !== "android") {
+    return;
+  }
+
+  await Notifications.setNotificationChannelAsync(
+    "medicamentos",
+    {
+      name: "Lembretes de medicamentos",
+      description: "Avisos dos horários dos medicamentos",
+      importance:
+        Notifications.AndroidImportance.HIGH,
+      sound: "default",
+      vibrationPattern: [0, 250, 250, 250],
+      enableVibrate: true,
+    }
+  );
+}
+
+// ======================================================
+// VERIFICAR / SOLICITAR PERMISSÃO
+// ======================================================
+
+async function verificarPermissaoNotificacoes(): Promise<boolean> {
+  const Notifications = obterNotificacoes();
+
+  if (!Notifications) {
+    return false;
+  }
+
+  try {
+    await configurarCanalAndroid();
+
+    let permissao =
+      await Notifications.getPermissionsAsync();
+
+    if (!permissao.granted) {
+      permissao =
+        await Notifications.requestPermissionsAsync();
+    }
+
+    return permissao.granted;
+  } catch (erro) {
+    console.error(
+      "[LembraFácil] Erro na permissão de notificações:",
+      erro
+    );
+    return false;
+  }
+}
+
+// ======================================================
+// CANCELAR NOTIFICAÇÃO EXPO
 // ======================================================
 
 export async function cancelarLembrete(
@@ -98,34 +165,35 @@ export async function cancelarLembrete(
     await Notifications.cancelScheduledNotificationAsync(
       notificacaoId
     );
+
+    delete ids[medicamentoId];
+    await salvarIds(ids);
+
+    console.log(
+      `[LembraFácil] Notificação cancelada: ${medicamentoId}`
+    );
   } catch (erro) {
     console.warn(
-      "Não foi possível cancelar a notificação antiga:",
+      "[LembraFácil] Erro ao cancelar notificação:",
       erro
     );
-    return;
+    throw erro;
   }
-
-  delete ids[medicamentoId];
-  await salvarIds(ids);
 }
 
 // ======================================================
-// AGENDAR LEMBRETE
+// AGENDAR NOTIFICAÇÃO EXPO
 // ======================================================
 
 export async function agendarLembrete(
   medicamento: Medicamento
 ): Promise<boolean> {
-  if (Platform.OS === "android") {
-    // No Android, o despertador principal é Kotlin.
-    // O agendamento nativo é tratado separadamente.
-    return false;
-  }
-
   const Notifications = obterNotificacoes();
 
   if (!Notifications) {
+    console.warn(
+      "[LembraFácil] Notificações indisponíveis."
+    );
     return false;
   }
 
@@ -154,12 +222,16 @@ export async function agendarLembrete(
   }
 
   const permissao =
-    await Notifications.getPermissionsAsync();
+    await verificarPermissaoNotificacoes();
 
-  if (!permissao.granted) {
+  if (!permissao) {
+    console.warn(
+      "[LembraFácil] Permissão de notificações negada."
+    );
     return false;
   }
 
+  // Cancela a notificação anterior ao reagendar.
   await cancelarLembrete(medicamento.id);
 
   const notificacaoId =
@@ -170,6 +242,9 @@ export async function agendarLembrete(
           `${medicamento.medicamento} — ` +
           `${medicamento.dosagem}`,
         sound: "default",
+        ...(Platform.OS === "android"
+          ? { channelId: "medicamentos" }
+          : {}),
         data: {
           medicamentoId: medicamento.id,
         },
@@ -188,11 +263,16 @@ export async function agendarLembrete(
 
   await salvarIds(ids);
 
+  console.log(
+    `[LembraFácil] Notificação agendada: ` +
+    `${medicamento.medicamento} às ${medicamento.horario}`
+  );
+
   return true;
 }
 
 // ======================================================
-// SINCRONIZAR LEMBRETES
+// SINCRONIZAR NOTIFICAÇÕES
 // ======================================================
 
 export async function sincronizarLembretes(
@@ -204,36 +284,32 @@ export async function sincronizarLembretes(
     return;
   }
 
-  // No Android, remover notificações antigas do Expo
-  // para evitar duplicidade com o despertador Kotlin.
-  if (Platform.OS === "android") {
-    const ids = await carregarIds();
-
-    for (const id of Object.keys(ids)) {
-      await cancelarLembrete(id);
-    }
-
-    console.log(
-      "[LembraFácil] Notificações Expo antigas removidas."
-    );
-
-    return;
-  }
-
-  // Outros sistemas continuam com o mecanismo Expo.
   const ids = await carregarIds();
 
   const medicamentosAtuais = new Set(
     medicamentos.map((item) => item.id)
   );
 
+  // Remove notificações de medicamentos excluídos.
   for (const id of Object.keys(ids)) {
     if (!medicamentosAtuais.has(id)) {
       await cancelarLembrete(id);
     }
   }
 
+  // Agenda ou atualiza os lembretes existentes.
   for (const medicamento of medicamentos) {
-    await agendarLembrete(medicamento);
+    try {
+      await agendarLembrete(medicamento);
+    } catch (erro) {
+      console.error(
+        `[LembraFácil] Falha ao agendar ${medicamento.medicamento}:`,
+        erro
+      );
+    }
   }
+
+  console.log(
+    "[LembraFácil] Sincronização de notificações concluída."
+  );
 }

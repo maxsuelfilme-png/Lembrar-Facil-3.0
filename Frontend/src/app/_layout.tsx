@@ -36,6 +36,7 @@ export default function RootLayout() {
         <Stack.Screen name="receita" />
         <Stack.Screen name="medicamentos" />
         <Stack.Screen name="rotina" />
+        <Stack.Screen name="teste-alarme" />
 
         <Stack.Screen name="farmacia-login" />
         <Stack.Screen name="farmacia-cadastro" />

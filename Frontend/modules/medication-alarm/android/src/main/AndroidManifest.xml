@@ -1,52 +1,52 @@
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Permissão para alarmes exatos -->
+    <!-- Permissão para agendar alarmes exatos -->
     <uses-permission
         android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
-    <!-- Permissão para notificações -->
+    <!-- Permissão para mostrar notificações -->
     <uses-permission
         android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Serviço em primeiro plano -->
+    <!-- Permissão para serviço em primeiro plano -->
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE" />
 
-    <!-- Reprodução de áudio em primeiro plano -->
+    <!-- Permissão para reprodução de áudio -->
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
-    <!-- Tela de alarme sobre a tela de bloqueio -->
+    <!-- Permissão para notificações em tela cheia -->
     <uses-permission
         android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
-    <!-- Restaurar alarmes após reinicialização -->
+    <!-- Permissão para restaurar alarmes após reiniciar -->
     <uses-permission
         android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application>
 
-        <!-- Recebe os alarmes programados -->
+        <!-- Recebe o disparo dos alarmes -->
         <receiver
             android:name="expo.modules.medicationalarm.MedicationAlarmReceiver"
             android:enabled="true"
             android:exported="false" />
 
-        <!-- Restaura alarmes após reinicialização -->
+        <!-- Restaura alarmes após reinicialização ou atualização -->
         <receiver
             android:name="expo.modules.medicationalarm.MedicationAlarmBootReceiver"
             android:enabled="true"
             android:exported="false">
 
             <intent-filter>
-                <action
-                    android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
 
         </receiver>
 
-        <!-- Serviço responsável pela notificação e pelo som -->
+        <!-- Serviço que toca o alarme e mostra a notificação -->
         <service
             android:name="expo.modules.medicationalarm.MedicationAlarmService"
             android:enabled="true"
@@ -56,10 +56,12 @@
         <!-- Tela do despertador -->
         <activity
             android:name="expo.modules.medicationalarm.MedicationAlarmActivity"
+            android:enabled="true"
             android:exported="false"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
-            android:excludeFromRecents="true" />
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop" />
 
     </application>
 
