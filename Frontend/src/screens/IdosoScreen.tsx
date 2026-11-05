@@ -1053,25 +1053,7 @@ export default function IdosoScreen() {
             />
 
           </View>
-
         </TouchableOpacity>
-
-        {/* TESTE DO DESPERTADOR ANDROID */}
-        <TouchableOpacity
-          style={styles.testeAlarmeButton}
-          activeOpacity={0.85}
-          onPress={() => router.push("/teste-alarme")}
-        >
-          <Ionicons name="alarm-outline" size={32} color="#2563EB" />
-          <View style={{ flex: 1, marginLeft: 14 }}>
-            <Text style={styles.testeAlarmeTitulo}>Testar despertador</Text>
-            <Text style={styles.testeAlarmeDescricao}>
-              Verificar alarmes e notificações do Android
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={24} color="#2563EB" />
-        </TouchableOpacity>
-
         {/* VINCULAR FAMILIAR */}
 
         <View style={styles.vinculoCard}>
@@ -1379,27 +1361,7 @@ export default function IdosoScreen() {
 }
 
 const styles = StyleSheet.create({
-  testeAlarmeButton: {
-    backgroundColor: "#DBEAFE",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 18,
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#93C5FD",
-  },
-  testeAlarmeTitulo: {
-    color: "#0F2557",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  testeAlarmeDescricao: {
-    color: "#64748B",
-    fontSize: 14,
-    marginTop: 4,
-  },
-
+ 
   container: {
 
     flex: 1,

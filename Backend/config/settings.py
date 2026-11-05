@@ -31,7 +31,9 @@ if not SECRET_KEY:
     SECRET_KEY = "chave-local-apenas-para-desenvolvimento"
 
 
-DEBUG = os.getenv("DEBUG", "False").lower() == "true"
+# DEBUG True somente quando definido no ambiente
+# No Railway, manter DEBUG=False
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 
 ALLOWED_HOSTS = [
@@ -52,7 +54,8 @@ CSRF_TRUSTED_ORIGINS = [
 # ======================================================
 
 INSTALLED_APPS = [
-    # Django
+    # Django Admin com Jazzmin
+    "jazzmin",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -82,6 +85,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -106,7 +110,6 @@ TEMPLATES = [
         "OPTIONS": {
             "context_processors": [
                 "django.template.context_processors.request",
-                "django.contrib.auth.context_processors.auth",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
             ],
@@ -189,9 +192,22 @@ USE_TZ = True
 # ARQUIVOS ESTÁTICOS E MÍDIA
 # ======================================================
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# WhiteNoise disponibiliza CSS e JS em produção
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": (
+            "whitenoise.storage."
+            "CompressedManifestStaticFilesStorage"
+        ),
+    },
+}
 
 MEDIA_URL = "/media/"
 
