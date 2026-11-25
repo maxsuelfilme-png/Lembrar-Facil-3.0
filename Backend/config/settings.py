@@ -39,7 +39,7 @@ DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost",
-    "192.168.1.7",
+    "192.168.1.4",
     ".railway.app",
 ]
 
@@ -203,8 +203,7 @@ STORAGES = {
     },
     "staticfiles": {
         "BACKEND": (
-            "whitenoise.storage."
-            "CompressedManifestStaticFilesStorage"
+            "django.contrib.staticfiles.storage.StaticFilesStorage"
         ),
     },
 }
@@ -269,3 +268,5 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
+# Permitir referências estáticas ausentes no manifesto do WhiteNoise
+WHITENOISE_MANIFEST_STRICT = False
